@@ -19,6 +19,7 @@
     5))
 
 
+
 ;;mvalue for math
 (define mvalue
   (lambda (lis)
@@ -33,6 +34,7 @@
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
+
 
 
 ;;mbool for boolean logic
@@ -51,11 +53,11 @@
       [(eq? (operator lis) '!) (not (mbool (operand1 lis)))])))
 
 
+
 ;;for if statements
 (define mif
   (lambda (lis)
     (cond
-      [(null? lis) '()]
       [(mbool (cadr lis)) (caddr lis)]
       [(hasNestedIf lis) (mif (cadddr lis))])))
 
@@ -64,18 +66,27 @@
   (lambda (lis)
     (>= (len lis) 4)))
 
+
 ;;calc length using accumulator
 (define len-acc
   (lambda (lis acc)
     (if (null? lis)
         acc
         (len-acc (cdr lis) (+ 1 acc)))))
+
 (define len
   (lambda (lis)
     (len-acc lis 0)))
 
 
-      
+
+;;implementation of while loops      ******untested (needs vars)
+(define mwhile
+  (lambda (lis)
+    (cond
+      [(mbool (cadr lis)) (mwhile (mstate (caddr lis)))])))
+
+
 
 ;;checks if atom is the same as any atom in a list (not * for a reason)
 (define isincluded
