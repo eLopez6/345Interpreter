@@ -1,5 +1,11 @@
 #lang racket
+require "simpleParser.rkt"
 
+(define main
+  (lambda (lis)
+    (cond
+
+      )))
 
 
 
