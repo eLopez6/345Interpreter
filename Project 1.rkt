@@ -14,6 +14,10 @@
       [(isincluded (car lis) '(> >= < <= ==)) (mbool lis)]
       )))
 
+(define mstate
+  (lambda (lis)
+    5))
+
 
 ;;mvalue for math
 (define mvalue
@@ -23,8 +27,8 @@
       [(eq? (operator lis) '+) (+ (mvalue (operand1 lis)) (mvalue (operand2 lis)))]
       [(eq? (operator lis) '-) (- (mvalue (operand1 lis)) (mvalue (operand2 lis)))]
       [(eq? (operator lis) '*) (* (mvalue (operand1 lis)) (mvalue (operand2 lis)))]
-      [(eq? (operator lis) '/) (quotient (mvalue (operand1 lis)) (mvalue operand2 lis))]
-      [(eq? (operator lis) '%) (remainder (mvalue (operand1 lis)) (mvalue operand2 lis))])))
+      [(eq? (operator lis) '/) (quotient (mvalue (operand1 lis)) (mvalue (operand2 lis)))]
+      [(eq? (operator lis) '%) (remainder (mvalue (operand1 lis)) (mvalue (operand2 lis)))])))
 
 (define operator car)
 (define operand1 cadr)
@@ -46,8 +50,32 @@
       [(eq? (operator lis) '||) (or (mbool (operand1 lis)) (mbool (operand2 lis)))]
       [(eq? (operator lis) '!) (not (mbool (operand1 lis)))])))
 
-      ;;[(and (list? lis) (isincluded (cdar lis) '(is a bool))) (mbool lis)]
 
+;;for if statements
+(define mif
+  (lambda (lis)
+    (cond
+      [(null? lis) '()]
+      [(mbool (cadr lis)) (caddr lis)]
+      [(hasNestedIf lis) (mif (cadddr lis))])))
+
+;;checks if there's and else if
+(define hasNestedIf
+  (lambda (lis)
+    (>= (len lis) 4)))
+
+;;calc length using accumulator
+(define len-acc
+  (lambda (lis acc)
+    (if (null? lis)
+        acc
+        (len-acc (cdr lis) (+ 1 acc)))))
+(define len
+  (lambda (lis)
+    (len-acc lis 0)))
+
+
+      
 
 ;;checks if atom is the same as any atom in a list (not * for a reason)
 (define isincluded
