@@ -14,12 +14,13 @@
       [(null? lis) (return state)]
       [(number? (car lis)) (car lis)]
       [(boolean? (car lis)) (car lis)]
-      [(eq? (caar lis) 'return) (mstate (cdr lis) (addreturn state (cdr lis)))]
+      [(eq? (caar lis) 'return) (mstate (cdr lis) (addreturn state (cdr (car lis))))]
       [(eq? (caar lis) 'var) (mstate (cdr lis) (instantiatevar (car lis) state))]
       [(eq? (caar lis) '=) (mstate (cdr lis) (updatevar (car lis) state))]
       [(eq? (caar lis) 'if) (mstate (cdr lis) (mif (car lis) state))]
       [(isincluded (caar lis) '(+ - * / %)) (mvalue (car lis))]
-      [(isincluded (caar lis) '(> >= < <= ==)) (mbool (car lis))])))
+      [(isincluded (caar lis) '(> >= < <= ==)) (mbool (car lis))]
+      [else (lookup (caar lis) state)])))
 
 
 ;;gets return val
@@ -32,7 +33,7 @@
 
 (define addreturn
   (lambda (state val)
-    (append state (list (cons 'return (mstate val state))))))
+    (append state (list (cons 'return (list (mstate val state)))))))
     
 
 
