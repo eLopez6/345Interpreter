@@ -4,7 +4,7 @@
 ;;where it starts
 (define main
   (lambda (filename)
-    (return (mstate (parser filename) '()))))
+    (return (mstate (parser filename) '((true #t) (false #f))))))
 
 
 ;;
@@ -15,7 +15,8 @@
       [(eq? (caar lis) 'return) (mstate (cdr lis) (addreturn state (cdar lis)))]
       [(eq? (caar lis) 'var) (mstate (cdr lis) (instantiatevar (car lis) state))]
       [(eq? (caar lis) '=) (mstate (cdr lis) (updatevar (car lis) state))]
-      [(eq? (caar lis) 'if) (mstate (cdr lis) (mif (car lis) state))])))
+      [(eq? (caar lis) 'if) (mstate (cdr lis) (mif (car lis) state))]
+      [(eq? (caar lis) 'while) (mstate (cdr lis) (mwhile (car lis) state))])))
 
 
 (define evaluate
@@ -24,7 +25,7 @@
       [(or (boolean? lis) (number? lis)) lis]
       [(not (list? lis)) (lookup lis state)]
       [(isincluded (car lis) '(+ - * / %)) (mvalue lis state)]
-      [(isincluded (car lis) '(> >= < <= ==)) (mbool lis state)])))
+      [(isincluded (car lis) '(> >= < <= == || && !)) (mbool lis state)])))
 
 
 ;;gets return val
@@ -32,6 +33,8 @@
   (lambda (state)
     (cond
       [(null? state) (error "No Return")]
+      [(and (eq? (caar state) 'return) (eq? #t (cadar state))) 'true]
+      [(and (eq? (caar state) 'return) (eq? #f (cadar state))) 'false]
       [(eq? (caar state) 'return) (cadar state)]
       [else (return (cdr state))])))
 
@@ -109,11 +112,12 @@
 
 
 
-;;implementation of while loops      ******untested (needs vars)
+;;implementation of while loops      
 (define mwhile
   (lambda (lis state)
     (cond
-      [(mbool (cadr lis)) (mwhile (mstate (caddr lis) state) '())])))
+      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state))]
+      [else state])))
 
 
 
