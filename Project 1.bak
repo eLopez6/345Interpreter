@@ -4,20 +4,19 @@
 ;;where it starts
 (define main
   (lambda (filename)
-    (call/cc
-      (lambda (k)
-        (mstate (parser filename) '((true #t) (false #f)) k)))))
+    (return (mstate (parser filename) '((true #t) (false #f))))))
 
 
+;;
 (define mstate
-  (lambda (lis state k)
+  (lambda (lis state)
     (cond
       [(null? lis) state]
-      [(eq? (caar lis) 'return) (return (evaluate (cadar lis) state) state k)]
-      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state) k)]
-      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (car lis) state) k)]
-      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state k) k)]
-      [(eq? (caar lis) 'while)  (mstate (cdr lis) (mwhile (car lis) state k) k)])))
+      [(eq? (caar lis) 'return) (mstate (cdr lis) (addreturn state (cdar lis)))]
+      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state))]
+      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (car lis) state))]
+      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state))]
+      [(eq? (caar lis) 'while)  (mstate (cdr lis) (mwhile (car lis) state))])))
 
 
 (define evaluate
@@ -31,11 +30,27 @@
 
 ;;gets return val
 (define return
-  (lambda (val state k)
+  (lambda (state)
     (cond
-      [(number? val) (k val)]
-      [(and (boolean? val) (eq? val #t)) (k 'true)]
-      [(and (boolean? val) (eq? val #f)) (k 'false)])))
+      [(null? state)                                           (error "No Return")]
+      [(and (eq? (caar state) 'return) (eq? #t (cadar state))) 'true]
+      [(and (eq? (caar state) 'return) (eq? #f (cadar state))) 'false]
+      [(eq? (caar state) 'return)                              (cadar state)]
+      [else                                                    (return (cdr state))])))
+
+(define addreturn
+  (lambda (state val)
+    (append state
+            (list
+             (cons 'return
+                   (cond
+                     [(or (boolean? (car val))
+                          (number? (car val)))
+                      val]
+                     [(not (list? (car val)))
+                      (list (lookup (car val) state))]
+                     [else
+                      (list (evaluate (car val) state))]))))))
     
 
 
@@ -82,11 +97,11 @@
 
 ;;for if statements
 (define mif
-  (lambda (lis state k)
+  (lambda (lis state)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state k)]
+      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state)]
       [(hasNestedIf lis)        (mif (cadddr lis) state)]
-      [else                     (mstate (cdddr lis) state k)])))
+      [else                     (mstate (cdddr lis) state)])))
 
 ;;checks if there's and else if
 (define hasNestedIf
@@ -109,9 +124,9 @@
 
 ;;implementation of while loops      
 (define mwhile
-  (lambda (lis state k)
+  (lambda (lis state)
     (cond
-      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state k) k)]
+      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state))]
       [else                     state])))
 
 
@@ -120,19 +135,10 @@
 (define instantiatevar
   (lambda (lis state)
     (cond
-      [(null? (cddr lis))             (cons (list (cadr lis)) state)]
-      [(checkexists (cadr lis) state) (error (cadr lis) "Redefing a variable")] 
-      [else                           (updatevar (append (cons '= (list (cadr lis)))
-                                                         (list (evaluate (caddr lis) state)))
-                                                 (cons (list (cadr lis)) state))])))
-
-; Check if a variable already has been declared
-(define checkexists
-  (lambda (var state)
-    (cond
-      [(null? state)          #f]
-      [(eq? (caar state) var) #t]
-      [else                   (checkexists var (cdr state))])))
+      [(null? (cddr lis)) (cons (list (cadr lis)) state)]
+      [else                 (updatevar (append (cons '= (list (cadr lis)))
+                                                 (list (evaluate (caddr lis) state)))
+                                                   (cons (list (cadr lis)) state))])))
 
 
 ;;default use of updatevar
