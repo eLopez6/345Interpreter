@@ -40,36 +40,25 @@
 
 (define addreturn
   (lambda (state val)
-    (append state
-            (list
-             (cons 'return
-                   (cond
-                     [(or (boolean? (car val))
-                          (number? (car val)))
-                      val]
-                     [(not (list? (car val)))
-                      (list (lookup (car val) state))]
-                     [else
-                      (list (evaluate (car val) state))]))))))
+    (cond
+      [(or (boolean? (car val)) (number? (car val))) (append state (list (cons 'return val)))];is a bool or a number
+      [(not (list? (car val))) (append state (list (cons 'return (list (lookup (car val) state)))))];is a var
+      [else (append state (list (cons 'return (list (evaluate (car val) state)))))])))
     
 
 
 ;;mvalue for math
 (define mvalue
   (lambda (lis state)
-    (let [(app (lambda (f)
-                 (f (mvalue (operand1 lis) state)
-                    (mvalue (operand2 lis) state))))]
     (cond
-      [(number? lis)                lis]
-      [(not (list? lis))            (lookup lis state)]
-      [(eq? (operator lis) '+)      (app +)]
-      [(and (eq? (operator lis) '-)
-            (eq? (len lis) 3))      (app -)] ; subtractions
-      [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state))] ; negation
-      [(eq? (operator lis) '*)      (app *)]
-      [(eq? (operator lis) '/)      (app quotient)]
-      [(eq? (operator lis) '%)      (app remainder)]))))
+      [(number? lis) lis]
+      [(not (list? lis)) (lookup lis state)]
+      [(eq? (operator lis) '+) (+ (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(and (eq? (operator lis) '-) (eq? (len lis) 3)) (- (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))];subtractions
+      [(eq? (operator lis) '-) (- (mvalue (operand1 lis) state))];negation
+      [(eq? (operator lis) '*) (* (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(eq? (operator lis) '/) (quotient (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(eq? (operator lis) '%) (remainder (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))])))
 
 (define operator car)
 (define operand1 cadr)
