@@ -33,28 +33,39 @@
 (define return
   (lambda (val state k)
     (cond
+<<<<<<< HEAD
       [(number? val) (k val)]
       [(and (boolean? val) (eq? val #t)) (k 'true)]
       [(and (boolean? val) (eq? val #f)) (k 'false)])))
+=======
+      [(null? state)                                           (error "No Return")]
+      [(and (eq? (caar state) 'return) (eq? #t (cadar state))) 'true]
+      [(and (eq? (caar state) 'return) (eq? #f (cadar state))) 'false]
+      [(eq? (caar state) 'return)                              (cadar state)]
+      [else                                                    (return (cdr state))])))
+
+(define addreturn
+  (lambda (state val)
+    (cond
+      [(or (boolean? (car val)) (number? (car val))) (append state (list (cons 'return val)))];is a bool or a number
+      [(not (list? (car val))) (append state (list (cons 'return (list (lookup (car val) state)))))];is a var
+      [else (append state (list (cons 'return (list (evaluate (car val) state)))))])))
+>>>>>>> c0b9b228ca0521668a25a26197dcbd20e1d1b81c
     
 
 
 ;;mvalue for math
 (define mvalue
   (lambda (lis state)
-    (let [(app (lambda (f)
-                 (f (mvalue (operand1 lis) state)
-                    (mvalue (operand2 lis) state))))]
     (cond
-      [(number? lis)                lis]
-      [(not (list? lis))            (lookup lis state)]
-      [(eq? (operator lis) '+)      (app +)]
-      [(and (eq? (operator lis) '-)
-            (eq? (len lis) 3))      (app -)] ; subtractions
-      [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state))] ; negation
-      [(eq? (operator lis) '*)      (app *)]
-      [(eq? (operator lis) '/)      (app quotient)]
-      [(eq? (operator lis) '%)      (app remainder)]))))
+      [(number? lis) lis]
+      [(not (list? lis)) (lookup lis state)]
+      [(eq? (operator lis) '+) (+ (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(and (eq? (operator lis) '-) (eq? (len lis) 3)) (- (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))];subtractions
+      [(eq? (operator lis) '-) (- (mvalue (operand1 lis) state))];negation
+      [(eq? (operator lis) '*) (* (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(eq? (operator lis) '/) (quotient (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(eq? (operator lis) '%) (remainder (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))])))
 
 (define operator car)
 (define operand1 cadr)
