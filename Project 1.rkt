@@ -124,10 +124,19 @@
 (define instantiatevar
   (lambda (lis state)
     (cond
-      [(null? (cddr lis)) (cons (list (cadr lis)) state)]
-      [else                 (updatevar (append (cons '= (list (cadr lis)))
-                                                 (list (evaluate (caddr lis) state)))
-                                                   (cons (list (cadr lis)) state))])))
+      [(null? (cddr lis))             (cons (list (cadr lis)) state)]
+      [(checkexists (cadr lis) state) (error (cadr lis) "Redefing a variable")] 
+      [else                           (updatevar (append (cons '= (list (cadr lis)))
+                                                         (list (evaluate (caddr lis) state)))
+                                                 (cons (list (cadr lis)) state))])))
+
+; Check if a variable already has been declared
+(define checkexists
+  (lambda (var state)
+    (cond
+      [(null? state)          #f]
+      [(eq? (caar state) var) #t]
+      [else                   (checkexists var (cdr state))])))
 
 
 ;;default use of updatevar
