@@ -13,18 +13,18 @@
     (cond
       [(null? lis) state]
       [(eq? (caar lis) 'return) (mstate (cdr lis) (addreturn state (cdar lis)))]
-      [(eq? (caar lis) 'var) (mstate (cdr lis) (instantiatevar (car lis) state))]
-      [(eq? (caar lis) '=) (mstate (cdr lis) (updatevar (car lis) state))]
-      [(eq? (caar lis) 'if) (mstate (cdr lis) (mif (car lis) state))]
-      [(eq? (caar lis) 'while) (mstate (cdr lis) (mwhile (car lis) state))])))
+      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state))]
+      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (car lis) state))]
+      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state))]
+      [(eq? (caar lis) 'while)  (mstate (cdr lis) (mwhile (car lis) state))])))
 
 
 (define evaluate
   (lambda (lis state)
     (cond
-      [(or (boolean? lis) (number? lis)) lis]
-      [(not (list? lis)) (lookup lis state)]
-      [(isincluded (car lis) '(+ - * / %)) (mvalue lis state)]
+      [(or (boolean? lis) (number? lis))              lis]
+      [(not (list? lis))                              (lookup lis state)]
+      [(isincluded (car lis) '(+ - * / %))            (mvalue lis state)]
       [(isincluded (car lis) '(> >= < <= == || && !)) (mbool lis state)])))
 
 
@@ -32,55 +32,65 @@
 (define return
   (lambda (state)
     (cond
-      [(null? state) (error "No Return")]
+      [(null? state)                                           (error "No Return")]
       [(and (eq? (caar state) 'return) (eq? #t (cadar state))) 'true]
       [(and (eq? (caar state) 'return) (eq? #f (cadar state))) 'false]
-      [(eq? (caar state) 'return) (cadar state)]
-      [else (return (cdr state))])))
+      [(eq? (caar state) 'return)                              (cadar state)]
+      [else                                                    (return (cdr state))])))
 
 (define addreturn
   (lambda (state val)
-    (cond
-      [(or (boolean? (car val)) (number? (car val))) (append state (list (cons 'return val)))];is a bool or a number
-      [(not (list? (car val))) (append state (list (cons 'return (list (lookup (car val) state)))))];is a var
-      [else (append state (list (cons 'return (list (evaluate (car val) state)))))])))
+    (append state
+            (list
+             (cons 'return
+                   (cond
+                     [(or (boolean? (car val))
+                          (number? (car val)))
+                      val]
+                     [(not (list? (car val)))
+                      (list (lookup (car val) state))]
+                     [else
+                      (list (evaluate (car val) state))]))))))
     
 
 
 ;;mvalue for math
 (define mvalue
   (lambda (lis state)
+    (let [(app (lambda (f)
+                 (f (mvalue (operand1 lis) state)
+                    (mvalue (operand2 lis) state))))]
     (cond
-      [(number? lis) lis]
-      [(not (list? lis)) (lookup lis state)]
-      [(eq? (operator lis) '+) (+ (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(and (eq? (operator lis) '-) (eq? (len lis) 3)) (- (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))];subtractions
-      [(eq? (operator lis) '-) (- (mvalue (operand1 lis) state))];negation
-      [(eq? (operator lis) '*) (* (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '/) (quotient (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '%) (remainder (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))])))
+      [(number? lis)                lis]
+      [(not (list? lis))            (lookup lis state)]
+      [(eq? (operator lis) '+)      (app +)]
+      [(and (eq? (operator lis) '-)
+            (eq? (len lis) 3))      (app -)] ; subtractions
+      [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state))] ; negation
+      [(eq? (operator lis) '*)      (app *)]
+      [(eq? (operator lis) '/)      (app quotient)]
+      [(eq? (operator lis) '%)      (app remainder)]))))
 
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
 
 
-
 ;;mbool for boolean logic
 (define mbool
   (lambda (lis state)
     (cond
-      [(boolean? lis) lis]
-      [(not (list? lis)) (lookup lis state)]
-      [(eq? (operator lis) '>) (> (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(boolean? lis)           lis]
+      [(not (list? lis))        (lookup lis state)]
+      [(eq? (operator lis) '>)  (> (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '>=) (>= (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '<) (< (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
+      [(eq? (operator lis) '<)  (< (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '<=) (<= (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '==) (eq? (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '!=) (not (eq? (mvalue (operand1 lis) state) (mvalue (operand2 lis) state)))]
       [(eq? (operator lis) '&&) (and (mbool (operand1 lis) state) (mbool (operand2 lis) state))]
       [(eq? (operator lis) '||) (or (mbool (operand1 lis) state) (mbool (operand2 lis) state))]
-      [(eq? (operator lis) '!) (not (mbool (operand1 lis) state))])))
+      [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state))])))
 
 
 
@@ -90,8 +100,8 @@
   (lambda (lis state)
     (cond
       [(mbool (cadr lis) state) (mstate (list (caddr lis)) state)]
-      [(hasNestedIf lis) (mif (cadddr lis) state)]
-      [else (mstate (cdddr lis) state)])))
+      [(hasNestedIf lis)        (mif (cadddr lis) state)]
+      [else                     (mstate (cdddr lis) state)])))
 
 ;;checks if there's and else if
 (define hasNestedIf
@@ -117,7 +127,7 @@
   (lambda (lis state)
     (cond
       [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state))]
-      [else state])))
+      [else                     state])))
 
 
 
@@ -126,7 +136,9 @@
   (lambda (lis state)
     (cond
       [(null? (cddr lis)) (cons (list (cadr lis)) state)]
-      [else (updatevar (append (cons '= (list (cadr lis))) (list (evaluate (caddr lis) state))) (cons (list (cadr lis)) state))])))
+      [else                 (updatevar (append (cons '= (list (cadr lis)))
+                                                 (list (evaluate (caddr lis) state)))
+                                                   (cons (list (cadr lis)) state))])))
 
 
 ;;default use of updatevar
@@ -139,19 +151,33 @@
   (lambda (lis state acc)
     (cond
       [(null? state) acc]
-      [(and (or (number? (caddr lis)) (boolean? (caddr lis))) (eq? (caar state) (cadr lis))) (updatevar-acc lis (cdr state) (append acc (list (cons (cadr lis) (list (caddr lis))))))]
-      [(eq? (caar state) (cadr lis)) (updatevar-acc lis (cdr state) (append acc (list (cons (cadr lis) (list (evaluate (caddr lis) state))))))]
-      [else (updatevar-acc lis (cdr state) (append acc (list (car state))))])))
+      [(and (or (number? (caddr lis))
+                (boolean? (caddr lis)))
+            (eq? (caar state) (cadr lis)))
+       (updatevar-acc lis
+                      (cdr state)
+                      (append acc
+                              (list
+                               (list (cadr lis) (caddr lis)))))]
+      [(eq? (caar state) (cadr lis))
+       (updatevar-acc lis
+                      (cdr state)
+                      (append
+                       acc
+                       (list (list (cadr lis)
+                                   (evaluate (caddr lis) state)))))]
+      [else
+       (updatevar-acc lis (cdr state) (append acc (list (car state))))])))
 
 
 ;;finds saved value of var
 (define lookup
   (lambda (var state)
     (cond
-      [(null? state) (error var "Used Before Declared")]
+      [(null? state)                                                (error var "Used Before Declared")]
       [(and (eq? (caar state) var) (not (eq? 2 (len (car state))))) (error var "Use Before Assigning")]
-      [(eq? (caar state) var) (cadar state)]
-      [else (lookup var (cdr state))])))
+      [(eq? (caar state) var)                                       (cadar state)]
+      [else                                                         (lookup var (cdr state))])))
 
 
 
@@ -159,6 +185,6 @@
 (define isincluded
   (lambda (a lis)
     (cond
-      [(null? lis) #f]
+      [(null? lis)       #f]
       [(eq? (car lis) a) #t]
-      [else (isincluded a (cdr lis))])))
+      [else              (isincluded a (cdr lis))])))
