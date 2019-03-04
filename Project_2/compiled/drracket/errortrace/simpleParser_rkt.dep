@@ -1,1 +1,0 @@
-("7.1" ("adaeaefb495c6f46a669c39dbdc983b41acdd0a4" . "d45b124e96618adf26924807952eb58f28097e5f") #"/Users/markgoldberg/Desktop/345Interpreter/Project_2/lex.rkt" (collects #"errortrace" #"errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))
