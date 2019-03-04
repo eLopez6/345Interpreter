@@ -5,19 +5,20 @@
 (define main
   (lambda (filename)
     (call/cc
-      (lambda (end)
-        (mstate (parser filename) '(()()) end)))))
+      (lambda (k)
+        (mstate (parser filename) '(()()) (lambda (val) (k (if (number? val) val (if (val) 'true 'false)))))))))
 
 
 (define mstate
-  (lambda (lis state end)
+  (lambda (lis state return)
     (cond
       [(null? lis) state]
-      [(eq? (caar lis) 'return) (return (evaluate (cadar lis) state) state end)]
-      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state) end)]
-      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) end)]
-      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state end) end)]
-      [(eq? (caar lis) 'while)  (mstate (cdr lis) (mwhile (car lis) state end) end)])))
+      [(eq? (caar lis) 'return) (return (evaluate (cadar lis) state))]
+      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state) return)]
+      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) return)]
+      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state return) return)]
+      [(eq? (caar lis) 'while)  (mstate (cdr lis) (mwhile (car lis) state return) return)])))
+      ;[(eq? (caar lis) 'break)  ??????])))
 
 
 (define evaluate
@@ -27,15 +28,6 @@
       [(not (list? lis))                              (lookup lis state)]
       [(isincluded (car lis) '(+ - * / %))            (mvalue lis state)]
       [(isincluded (car lis) '(> >= < <= == || && !)) (mbool lis state)])))
-
-
-;;gets return val
-(define return
-  (lambda (val state end)
-    (cond
-      [(number? val) (end val)]
-      [(and (boolean? val) (eq? val #t)) (end 'true)]
-      [(and (boolean? val) (eq? val #f)) (end 'false)])))
     
 
 
@@ -86,11 +78,11 @@
 
 ;;for if statements
 (define mif
-  (lambda (lis state end)
+  (lambda (lis state return)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state end)]
+      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state return)]
       [(hasNestedIf lis)        (mif (cadddr lis) state)]
-      [else                     (mstate (cdddr lis) state end)])))
+      [else                     (mstate (cdddr lis) state return)])))
 
 ;;checks if there's and else if
 (define hasNestedIf
@@ -113,9 +105,9 @@
 
 ;;implementation of while loops      
 (define mwhile
-  (lambda (lis state end)
+  (lambda (lis state return)
     (cond
-      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state end) end)]
+      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state return) return)]
       [else                     state])))
 
 
