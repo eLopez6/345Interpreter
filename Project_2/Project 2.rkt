@@ -6,19 +6,23 @@
   (lambda (filename)
     (call/cc
       (lambda (k)
-        (mstate (parser filename) '(()()) (lambda (val) (k (if (number? val) val (if (val) 'true 'false)))))))))
+        (mstate (parser filename)
+                '(()())
+                '()
+                (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
 
 (define mstate
-  (lambda (lis state return)
+  (lambda (lis state break return)
     (cond
       [(null? lis) state]
       [(eq? (caar lis) 'return) (return (evaluate (cadar lis) state))]
-      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state) return)]
-      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) return)]
-      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state return) return)]
-      [(eq? (caar lis) 'while)  (mstate (cdr lis) (mwhile (car lis) state return) return)])))
-      ;[(eq? (caar lis) 'break)  ??????])))
+      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state) break return)]
+      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) break return)]
+      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state break return) break return)]
+      [(eq? (caar lis) 'while)  (mstate (cdr lis) (call/cc (lambda (break) (mwhile (car lis) state break return))) break return)]
+      [(eq? (caar lis) 'break)  (break state)])))
+
 
 
 (define evaluate
@@ -78,11 +82,11 @@
 
 ;;for if statements
 (define mif
-  (lambda (lis state return)
+  (lambda (lis state break return)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state return)]
-      [(hasNestedIf lis)        (mif (cadddr lis) state)]
-      [else                     (mstate (cdddr lis) state return)])))
+      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state break return)]
+      [(hasNestedIf lis)        (mif (cadddr lis) break state)]
+      [else                     (mstate (cdddr lis) state break return)])))
 
 ;;checks if there's and else if
 (define hasNestedIf
@@ -105,9 +109,9 @@
 
 ;;implementation of while loops      
 (define mwhile
-  (lambda (lis state return)
+  (lambda (lis state break return)
     (cond
-      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state return) return)]
+      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state break return) break return)]
       [else                     state])))
 
 
@@ -172,3 +176,34 @@
       [(null? lis)       #f]
       [(eq? (car lis) a) #t]
       [else              (isincluded a (cdr lis))])))
+
+
+(main "../testfiles/1.txt")
+(main "../testfiles/2.txt")
+(main "../testfiles/3.txt")
+(main "../testfiles/4.txt")
+(main "../testfiles/5.txt")
+(main "../testfiles/6.txt")
+(main "../testfiles/7.txt")
+(main "../testfiles/8.txt")
+(main "../testfiles/9.txt")
+(main "../testfiles/10.txt")
+;(main "../testfiles/11.txt")
+;(main "../testfiles/12.txt")
+;(main "../testfiles/13.txt")
+;(main "../testfiles/14.txt")
+(main "../testfiles/15.txt")
+(main "../testfiles/16.txt")
+(main "../testfiles/17.txt")
+(main "../testfiles/18.txt")
+(main "../testfiles/19.txt")
+(main "../testfiles/20.txt")
+(main "../testfiles/2-9.txt")
+
+
+
+
+
+
+
+
