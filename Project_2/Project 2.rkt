@@ -21,7 +21,16 @@
       [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) break return)]
       [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state break return) break return)]
       [(eq? (caar lis) 'while)  (mstate (cdr lis) (call/cc (lambda (break) (mwhile (car lis) state break return))) break return)]
-      [(eq? (caar lis) 'break)  (break state)])))
+      [(eq? (caar lis) 'break)  (break state)]
+      [(eq? (caar lis) 'begin)  ])));(mstate (cdr lis) ]))))
+
+(define addstatelayer
+  (lambda (state)
+    (cons '(()()) (list state))))
+
+(define removestatelayer
+  (lambda (state)
+    (cdr state)))
 
 
 
