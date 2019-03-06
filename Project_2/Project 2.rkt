@@ -129,20 +129,26 @@
 
 (define addtostate
   (lambda (lis state)
-    (cons (cons (cadr lis) (car state))
-          (list (cons '() (cadr state))))))
+    (cons
+          (cons (cons (car lis) (caar state))
+                (list (cons (cadr lis) (cadar state))))
+          (cdr state))))
+    ;(cons (cons (cadr lis) (car state))
+     ;     (list (cons '() (cadr state))))))
     
 ;; Instatiate variables
 (define instantiatevar
   (lambda (lis state)
     (cond
-      [(null? (cddr lis))             (addtostate lis state)]
-      [(checkexists (cadr lis) state) (error (cadr lis) "Redefining a variable")] 
-      [else                           (updatevar (cdr lis)
-                                                 (addtostate lis state))])))
+      [(null? (cddr lis))
+       (addtostate lis state)]
+      [(checkexists (cadr lis) (car state))
+       (error (cadr lis) "Redefining a variable")] 
+      [else
+       (updatevar (cdr lis) (addtostate lis state))])))
 
 
-;; Check if a variable already has been declared
+;; Check if a variable already has been declared, returns true if in current state (expects single layer state)
 (define checkexists
   (lambda (var state)
     (cond
@@ -183,9 +189,9 @@
       [(and (eq? (caar state) var) (null? (caadr state))) (error var "Use Before Assigning")]
       [(eq? (caar state) var)                             (break (caadr state))]
       [else                                               (lookup var
-                                                                  (cons (cdar state)
-                                                                        (list (cdadr state)))
+                                                                  (cons (cdar state) (list (cdadr state)))
                                                                   break)])))
+
 ; if lookup finds something, a break is called
 ; otherwise, no variable var exists in state
 (define lookup-all
@@ -193,7 +199,7 @@
     (call/cc
      (lambda (k)
        (cond
-         [(null? (car (map (lambda (xss) (lookup var xss k)) state))) 
+         [(list? (map (lambda (xss) (lookup var xss k)) state))
           (error var "Used Before Declared")])))))
 
       
