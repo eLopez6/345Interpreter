@@ -1,8 +1,8 @@
 #lang racket
 (require "simpleParser.rkt")
 
-(define emptystate '((()())))
-(define startbreak '())
+(define emptystate '(()()))
+(define startbreak (lambda () '()))
 
 ;;where it starts
 (define main
@@ -10,7 +10,7 @@
     (call/cc
       (lambda (k)
         (mstate (parser filename)
-                emptystate
+                (list emptystate)
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
@@ -31,7 +31,7 @@
 ; Make sure these work as intended with the list of states model, ie '(((x)(10)) ((z)(5)))
 (define addstatelayer
   (lambda (state)
-    (cons '(()()) (list state))))
+    (cons '(()()) state)))
 
 (define removestatelayer
   (lambda (state)
@@ -129,17 +129,15 @@
 
 (define addtostate
   (lambda (lis state)
-    (cons (cons (cadr lis)
-                (car state))
-          (list (cons '()
-                      (cadr state))))))
+    (cons (cons (cadr lis) (car state))
+          (list (cons '() (cadr state))))))
     
 ;; Instatiate variables
 (define instantiatevar
   (lambda (lis state)
     (cond
       [(null? (cddr lis))             (addtostate lis state)]
-      [(checkexists (cadr lis) state) (error (cadr lis) "Redefing a variable")] 
+      [(checkexists (cadr lis) state) (error (cadr lis) "Redefining a variable")] 
       [else                           (updatevar (cdr lis)
                                                  (addtostate lis state))])))
 
@@ -181,23 +179,26 @@
     (cond
       [(eq? var 'true)                                    (break #t)]
       [(eq? var 'false)                                   (break #f)] 
-      [(null? (car state))                                (error var "Used Before Declared")]
+      [(null? (car state))                                '()]
       [(and (eq? (caar state) var) (null? (caadr state))) (error var "Use Before Assigning")]
       [(eq? (caar state) var)                             (break (caadr state))]
       [else                                               (lookup var
                                                                   (cons (cdar state)
                                                                         (list (cdadr state)))
                                                                   break)])))
-
+; if lookup finds something, a break is called
+; otherwise, no variable var exists in state
 (define lookup-all
   (lambda (var state)
     (call/cc
      (lambda (k)
-       (map (lambda (xss) ; the ith element of the states
-              (lookup var xss k)) ; lookup within the state
-            state)))))
+       (cond
+         [(null? (car (map (lambda (xss) (lookup var xss k)) state))) 
+          (error var "Used Before Declared")])))))
 
-
+      
+  
+              
 
 ;;checks if atom is the same as any atom in a list (not * for a reason)
 (define isincluded
