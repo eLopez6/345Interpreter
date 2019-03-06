@@ -1,14 +1,17 @@
 #lang racket
 (require "simpleParser.rkt")
 
+(define startstate '((()())))
+(define startbreak '())
+
 ;;where it starts
 (define main
   (lambda (filename)
     (call/cc
       (lambda (k)
         (mstate (parser filename)
-                '(()())
-                '()
+                startstate
+                startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
 
@@ -33,31 +36,33 @@
     (cdr state)))
 
 
-
 (define evaluate
   (lambda (lis state)
     (cond
       [(or (boolean? lis) (number? lis))              lis]
-      [(not (list? lis))                              (lookup lis state)]
+      [(not (list? lis))                              (lookup-all lis state)]
       [(isincluded (car lis) '(+ - * / %))            (mvalue lis state)]
       [(isincluded (car lis) '(> >= < <= == || && !)) (mbool lis state)])))
-    
 
 
-;;mvalue for math
+(define operator car)
+(define operand1 cadr)
+(define operand2 caddr)
+
+;; mvalue for math
 (define mvalue
   (lambda (lis state)
     (cond
       [(number? lis)
        lis]
       [(not (list? lis))
-       (lookup lis state)]
+       (lookup-all lis state)]
       [(eq? (operator lis) '+)
        (+ (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(and (eq? (operator lis) '-) (eq? (len lis) 3))
-       (- (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))];subtractions
+       (- (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))] ; subtractions
       [(eq? (operator lis) '-)
-       (- (mvalue (operand1 lis) state))];negation
+       (- (mvalue (operand1 lis) state))] ; negation
       [(eq? (operator lis) '*)
        (* (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '/)
@@ -65,17 +70,13 @@
       [(eq? (operator lis) '%)
        (remainder (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))])))
 
-(define operator car)
-(define operand1 cadr)
-(define operand2 caddr)
-
 
 ;;mbool for boolean logic
 (define mbool
   (lambda (lis state)
     (cond
       [(boolean? lis)           lis]
-      [(not (list? lis))        (lookup lis state)]
+      [(not (list? lis))        (lookup-all lis state)]
       [(eq? (operator lis) '>)  (> (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '>=) (>= (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
       [(eq? (operator lis) '<)  (< (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
@@ -88,8 +89,7 @@
 
 
 
-
-;;for if statements
+;; for if statements
 (define mif
   (lambda (lis state break return)
     (cond
@@ -97,13 +97,14 @@
       [(hasNestedIf lis)        (mif (cadddr lis) break state)]
       [else                     (mstate (cdddr lis) state break return)])))
 
-;;checks if there's and else if
+
+;; checks if there's and else if
 (define hasNestedIf
   (lambda (lis)
     (and (>= (len lis) 4) (eq? (car (cadddr lis)) 'if))))
 
 
-;;calc length using accumulator
+;; calc length using accumulator
 (define len-acc
   (lambda (lis acc)
     (if (null? lis)
@@ -124,17 +125,24 @@
       [else                     state])))
 
 
-
-;;instatiate variables
+(define something
+  (lambda (state)
+    (cons (cons (cadr lis)
+                (car state))
+          (list (cons '()
+                      (cadr state))))
+    
+;; Instatiate variables
 (define instantiatevar
   (lambda (lis state)
     (cond
-      [(null? (cddr lis))             (cons (cons (cadr lis) (car state)) (list (cons '() (cadr state))))]
+      [(null? (cddr lis))             (something state)]
       [(checkexists (cadr lis) state) (error (cadr lis) "Redefing a variable")] 
-      [else                           (updatevar (cdr lis) (cons (cons (cadr lis) (car state)) (list (cons '() (cadr state)))))])))
+      [else                           (updatevar (cdr lis)
+                                                 (something state))])))
 
 
-; Check if a variable already has been declared
+;; Check if a variable already has been declared
 (define checkexists
   (lambda (var state)
     (cond
@@ -143,12 +151,12 @@
       [else                   (checkexists var (cons (cdar state) (list (cdadr state))))])))
 
 
-;;default use of updatevar
+;; default use of updatevar
 (define updatevar
   (lambda (lis state)
     (updatevar-acc (car lis) (evaluate (cadr lis) state) state '(()()))))
 
-;;set variable
+;; set variable
 (define updatevar-acc
   (lambda (var val state acc)
     (cond
@@ -167,14 +175,25 @@
 
 ;;finds saved value of var
 (define lookup
-  (lambda (var state)
+  (lambda (var state break)
     (cond
-      [(eq? var 'true)                                    #t]
-      [(eq? var 'false)                                   #f] 
+      [(eq? var 'true)                                    (break #t)]
+      [(eq? var 'false)                                   (break #f)] 
       [(null? (car state))                                (error var "Used Before Declared")]
       [(and (eq? (caar state) var) (null? (caadr state))) (error var "Use Before Assigning")]
-      [(eq? (caar state) var)                             (caadr state)]
-      [else                                               (lookup var (cons (cdar state) (list (cdadr state))))])))
+      [(eq? (caar state) var)                             (break (caadr state))]
+      [else                                               (lookup var
+                                                                  (cons (cdar state)
+                                                                        (list (cdadr state)))
+                                                                  break)])))
+
+(define lookup-all
+  (lambda (var state)
+    (call/cc
+     (lambda (k)
+       (map (lambda (xss)
+              (lookup var xss k))
+            state)))))
 
 
 
@@ -187,27 +206,28 @@
       [else              (isincluded a (cdr lis))])))
 
 
-(main "../testfiles/1.txt")
-(main "../testfiles/2.txt")
-(main "../testfiles/3.txt")
-(main "../testfiles/4.txt")
-(main "../testfiles/5.txt")
-(main "../testfiles/6.txt")
-(main "../testfiles/7.txt")
-(main "../testfiles/8.txt")
-(main "../testfiles/9.txt")
-(main "../testfiles/10.txt")
+(= 150 (main "../testfiles/1.txt"))
+(= -4 (main "../testfiles/2.txt"))
+(= 10 (main "../testfiles/3.txt"))
+(= 16 (main "../testfiles/4.txt"))
+(= 220 (main "../testfiles/5.txt"))
+(= 5 (main "../testfiles/6.txt"))
+(= 6 (main "../testfiles/7.txt"))
+(= 10 (main "../testfiles/8.txt"))
+(= 5 (main "../testfiles/9.txt"))
+(= -39 (main "../testfiles/10.txt"))
 ;(main "../testfiles/11.txt")
 ;(main "../testfiles/12.txt")
 ;(main "../testfiles/13.txt")
 ;(main "../testfiles/14.txt")
-(main "../testfiles/15.txt")
-(main "../testfiles/16.txt")
-(main "../testfiles/17.txt")
-(main "../testfiles/18.txt")
-(main "../testfiles/19.txt")
-(main "../testfiles/20.txt")
-(main "../testfiles/2-9.txt")
+(eq? 'true (main "../testfiles/15.txt"))
+(= 100 (main "../testfiles/16.txt"))
+(eq? 'false (main "../testfiles/17.txt"))
+(eq? 'true (main "../testfiles/18.txt"))
+(= 128 (main "../testfiles/19.txt"))
+(= 12 (main "../testfiles/20.txt"))
+; (main "../testfiles/2-9.txt")
+
 
 
 
