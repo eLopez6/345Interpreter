@@ -1,7 +1,7 @@
 #lang racket
 (require "simpleParser.rkt")
 
-(define emptystate '(()()))
+(define emptystate (lambda () '(()())))
 (define startbreak (lambda () '()))
 
 ;;where it starts
@@ -10,7 +10,7 @@
     (call/cc
       (lambda (k)
         (mstate (parser filename)
-                (list emptystate)
+                (list (emptystate))
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
@@ -20,19 +20,20 @@
     (cond
       [(null? lis) state]
       [(eq? (caar lis) 'return) (return (evaluate (cadar lis) state))]
-      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (car lis) state) break return)]
+      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (cdar lis) state) break return)]
       [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) break return)]
       [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state break return) break return)]
       [(eq? (caar lis) 'while)  (mstate (cdr lis) (call/cc (lambda (break) (mwhile (car lis) state break return))) break return)]
       [(eq? (caar lis) 'break)  (break state)]
-      [(eq? (caar lis) 'begin)  ])));(mstate (cdr lis) ]))))
+      [(eq? (caar lis) 'begin)  (mstate (cdr lis) (removestatelayer (mstate (cadr lis) (addstatelayer state) break return)) break return)])))
 
 
-; Make sure these work as intended with the list of states model, ie '(((x)(10)) ((z)(5)))
+;adds a state to the list of states
 (define addstatelayer
   (lambda (state)
-    (cons '(()()) state)))
+    (cons (emptystate) state)))
 
+;removes a layer from the list of states
 (define removestatelayer
   (lambda (state)
     (cdr state)))
@@ -126,26 +127,25 @@
       [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state break return) break return)]
       [else                     state])))
 
-
+;; adds a value into the most recent state
 (define addtostate
-  (lambda (lis state)
+  (lambda (val state)
     (cons
-          (cons (cons (car lis) (caar state))
-                (list (cons (cadr lis) (cadar state))))
+          (cons (cons val (caar state))
+                (list (cons '() (cadar state))))
           (cdr state))))
-    ;(cons (cons (cadr lis) (car state))
-     ;     (list (cons '() (cadr state))))))
+
     
 ;; Instatiate variables
 (define instantiatevar
   (lambda (lis state)
     (cond
-      [(null? (cddr lis))
-       (addtostate lis state)]
-      [(checkexists (cadr lis) (car state))
-       (error (cadr lis) "Redefining a variable")] 
+      [(checkexists (car lis) (car state))
+       (error (car lis) "Redefining a variable")]
+      [(null? (cdr lis))
+       (addtostate (car lis) state)]
       [else
-       (updatevar (cdr lis) (addtostate lis state))])))
+       (updatevar lis (addtostate (car lis) state))])))
 
 
 ;; Check if a variable already has been declared, returns true if in current state (expects single layer state)
@@ -160,9 +160,22 @@
 ;; default use of updatevar
 (define updatevar
   (lambda (lis state)
-    (updatevar-acc (car lis) (evaluate (cadr lis) state) state '(()()))))
+    (updatevar-all-acc lis state '())))
 
-;; set variable
+
+;; set variable in most recent state for list of states
+(define updatevar-all-acc
+  (lambda (lis state acc)
+    (cond
+      [(null? state)
+       (error (car lis) "Used Before Declared")]
+      [(checkexists (car lis) (car state))
+       (append acc (cons (updatevar-acc (car lis) (evaluate (cadr lis) state) (car state) (emptystate)) (cdr state)))]
+      [else
+       (updatevar-all-acc lis (cdr state) (append acc (car state)))])))
+
+
+;; set variable for single state
 (define updatevar-acc
   (lambda (var val state acc)
     (cond
