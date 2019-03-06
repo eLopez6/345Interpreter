@@ -1,7 +1,7 @@
 #lang racket
 (require "simpleParser.rkt")
 
-(define startstate '((()())))
+(define emptystate '((()())))
 (define startbreak '())
 
 ;;where it starts
@@ -10,7 +10,7 @@
     (call/cc
       (lambda (k)
         (mstate (parser filename)
-                startstate
+                emptystate
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
@@ -27,6 +27,8 @@
       [(eq? (caar lis) 'break)  (break state)]
       [(eq? (caar lis) 'begin)  ])));(mstate (cdr lis) ]))))
 
+
+; Make sure these work as intended with the list of states model, ie '(((x)(10)) ((z)(5)))
 (define addstatelayer
   (lambda (state)
     (cons '(()()) (list state))))
@@ -125,21 +127,21 @@
       [else                     state])))
 
 
-(define something
-  (lambda (state)
+(define addtostate
+  (lambda (lis state)
     (cons (cons (cadr lis)
                 (car state))
           (list (cons '()
-                      (cadr state))))
+                      (cadr state))))))
     
 ;; Instatiate variables
 (define instantiatevar
   (lambda (lis state)
     (cond
-      [(null? (cddr lis))             (something state)]
+      [(null? (cddr lis))             (addtostate lis state)]
       [(checkexists (cadr lis) state) (error (cadr lis) "Redefing a variable")] 
       [else                           (updatevar (cdr lis)
-                                                 (something state))])))
+                                                 (addtostate lis state))])))
 
 
 ;; Check if a variable already has been declared
@@ -191,8 +193,8 @@
   (lambda (var state)
     (call/cc
      (lambda (k)
-       (map (lambda (xss)
-              (lookup var xss k))
+       (map (lambda (xss) ; the ith element of the states
+              (lookup var xss k)) ; lookup within the state
             state)))))
 
 
