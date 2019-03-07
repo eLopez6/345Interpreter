@@ -25,7 +25,8 @@
       [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state break return) break return)]
       [(eq? (caar lis) 'while)  (mstate (cdr lis) (call/cc (lambda (break) (mwhile (car lis) state break return))) break return)]
       [(eq? (caar lis) 'break)  (break state)]
-      [(eq? (caar lis) 'begin)  (mstate (cdr lis) (removestatelayer (mstate (cadr lis) (addstatelayer state) break return)) break return)])))
+      [(eq? (caar lis) 'continue)  state]
+      [(eq? (caar lis) 'begin)  (mstate (cdr lis) (removestatelayer (mstate (cdar lis) (addstatelayer state) break return)) break return)])))
 
 
 ;adds a state to the list of states
@@ -160,19 +161,19 @@
 ;; default use of updatevar
 (define updatevar
   (lambda (lis state)
-    (updatevar-all-acc lis state '())))
+    (updatevar-all-acc lis state state '())))
 
 
 ;; set variable in most recent state for list of states
 (define updatevar-all-acc
-  (lambda (lis state acc)
+  (lambda (lis state all-state acc)
     (cond
       [(null? state)
        (error (car lis) "Used Before Declared")]
       [(checkexists (car lis) (car state))
-       (append acc (cons (updatevar-acc (car lis) (evaluate (cadr lis) state) (car state) (emptystate)) (cdr state)))]
+       (append acc (cons (updatevar-acc (car lis) (evaluate (cadr lis) all-state) (car state) (emptystate)) (cdr state)))]
       [else
-       (updatevar-all-acc lis (cdr state) (append acc (car state)))])))
+       (updatevar-all-acc lis (cdr state) all-state (append acc (list (car state))))])))
 
 
 ;; set variable for single state
@@ -216,9 +217,6 @@
           (error var "Used Before Declared")])))))
 
       
-  
-              
-
 ;;checks if atom is the same as any atom in a list (not * for a reason)
 (define isincluded
   (lambda (a lis)
@@ -228,27 +226,55 @@
       [else              (isincluded a (cdr lis))])))
 
 
-(= 150 (main "../testfiles/1.txt"))
-(= -4 (main "../testfiles/2.txt"))
-(= 10 (main "../testfiles/3.txt"))
-(= 16 (main "../testfiles/4.txt"))
-(= 220 (main "../testfiles/5.txt"))
-(= 5 (main "../testfiles/6.txt"))
-(= 6 (main "../testfiles/7.txt"))
-(= 10 (main "../testfiles/8.txt"))
-(= 5 (main "../testfiles/9.txt"))
-(= -39 (main "../testfiles/10.txt"))
-;(main "../testfiles/11.txt")
-;(main "../testfiles/12.txt")
-;(main "../testfiles/13.txt")
-;(main "../testfiles/14.txt")
-(eq? 'true (main "../testfiles/15.txt"))
-(= 100 (main "../testfiles/16.txt"))
-(eq? 'false (main "../testfiles/17.txt"))
-(eq? 'true (main "../testfiles/18.txt"))
-(= 128 (main "../testfiles/19.txt"))
-(= 12 (main "../testfiles/20.txt"))
-; (main "../testfiles/2-9.txt")
+
+
+
+
+
+(define test
+  (lambda (val file)
+    (cond
+      [(not (eq? val (main file))) (error "TEST FAILED" file)])))
+
+(require racket/exn)
+(define testError
+  (lambda (err file)
+    (cond
+      [(with-handlers ([exn:fail? (lambda (exn) (not (string-contains? (exn->string exn) err)))]) (main file)) (error "TEST FAILED" file)])))
+
+
+(test 150 "../testfiles/1.txt")
+(test -4 "../testfiles/2.txt")
+(test 10 "../testfiles/3.txt")
+(test 16 "../testfiles/4.txt")
+(test 220 "../testfiles/5.txt")
+(test 5 "../testfiles/6.txt")
+(test 6 "../testfiles/7.txt")
+(test 10 "../testfiles/8.txt")
+(test 5 "../testfiles/9.txt")
+(test -39 "../testfiles/10.txt")
+(testError "y: Used Before Declared" "../testfiles/11.txt")
+(testError "x: Used Before Declared" "../testfiles/12.txt")
+(testError "x: Use Before Assigning" "../testfiles/13.txt")
+(testError "x: Redefining a variable" "../testfiles/14.txt")
+(test 'true "../testfiles/15.txt")
+(test 100 "../testfiles/16.txt")
+(test 'false "../testfiles/17.txt")
+(test 'true "../testfiles/18.txt")
+(test 128 "../testfiles/19.txt")
+(test 12 "../testfiles/20.txt")
+
+
+(test 20 "../testfiles/2-1.txt")
+(test 164 "../testfiles/2-2.txt")
+(test 32 "../testfiles/2-3.txt")
+(test 2 "../testfiles/2-4.txt")
+(testError "min: Used Before Declared" "../testfiles/2-5.txt")
+(test 25 "../testfiles/2-6.txt")
+(test 21 "../testfiles/2-7.txt")
+(test 6 "../testfiles/2-8.txt")
+(test -1 "../testfiles/2-9.txt")
+(test 789 "../testfiles/2-10.txt")
 
 
 
