@@ -2,8 +2,12 @@
 (require "simpleParser.rkt")
 
 (define emptystate (lambda () '(()())))
-(define startbreak '())
+(define startcatch '())
+(define startfinally '())
 (define startcontinue '())
+(define startbreak '())
+
+
 
 ;;where it starts
 (define main
@@ -12,25 +16,29 @@
       (lambda (k)
         (mstate (parser filename)
                 (list (emptystate))
+                startcatch
+                startfinally
                 startcontinue
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
 
 (define mstate
-  (lambda (lis state continue break return)
+  (lambda (lis state catch finally continue break return)
     (cond
       [(null? lis) state]
       [(eq? (caar lis) 'return)
        (return (evaluate (cadar lis) state))]
       [(eq? (caar lis) 'var)
-       (mstate (cdr lis) (instantiatevar (cdar lis) state) continue break return)]
+       (mstate (cdr lis) (instantiatevar (cdar lis) state) catch finally continue break return)]
       [(eq? (caar lis) '=)
-       (mstate (cdr lis) (updatevar (cdar lis) state) continue break return)]
+       (mstate (cdr lis) (updatevar (cdar lis) state) catch finally continue break return)]
+      [(eq? (caar lis) 'begin)
+       (mstate (cdr lis) (removestatelayer (mstate (cdar lis) (addstatelayer state) catch finally continue break return)) catch finally continue break return)]
       [(eq? (caar lis) 'if)
-       (mstate (cdr lis) (mif (car lis) state continue break return) continue break return)]
+       (mstate (cdr lis) (mif (car lis) state catch finally continue break return) catch finally continue break return)]
       [(eq? (caar lis) 'while)
-       (mstate (cdr lis) (truncstate (call/cc (lambda (break) (mwhile (car lis) state continue break return))) (len state)) continue break return)]
+       (mstate (cdr lis) (truncstate (call/cc (lambda (break) (mwhile (car lis) state catch finally continue break return))) (len state)) catch finally continue break return)]
       [(and (eq? (caar lis) 'break) (not (null? break)))
        (break state)]
       [(eq? (caar lis) 'break)
@@ -39,8 +47,12 @@
        (continue state)]
       [(eq? (caar lis) 'continue)
        (error "Continue Outside of Loop")]
-      [(eq? (caar lis) 'begin)
-       (mstate (cdr lis) (removestatelayer (mstate (cdar lis) (addstatelayer state) continue break return)) continue break return)])))
+      [(and (eq? (caar lis) 'throw) (not (null? throw)))
+       (catch (evaluate (cadar lis) state))]
+      [(eq? (caar lis) 'throw)
+       (error "Throw Outside of try")])))
+
+      
 
 
 ;adds a state to the list of states
@@ -59,6 +71,19 @@
     (cond
       [(eq? (len state) length) state]
       [else (truncstate (removestatelayer state) length)])))
+
+(define mtcf
+  (lambda (trylis catchlis finallylis state catch finally continue break return)
+       (mstate finallylis
+               (call/cc (lambda (finally)
+                  (mstate catchlis
+                          (call/cc (lambda (catch)
+                             (mstate trylis state catch finally continue break return)))
+                          catch finally continue break return)))
+               catch finally continue break return)))
+       
+;;(define mcatch
+  ;(lambda (val state catch finally continue brea
 
 
 (define evaluate
@@ -116,11 +141,11 @@
 
 ;; for if statements
 (define mif
-  (lambda (lis state continue break return)
+  (lambda (lis state catch finally continue break return)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state continue break return)]
+      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state catch finally continue break return)]
       [(hasNestedIf lis)        (mif (cadddr lis) break state)]
-      [else                     (mstate (cdddr lis) state continue break return)])))
+      [else                     (mstate (cdddr lis) state catch finally continue break return)])))
 
 
 ;; checks if there's and else if
@@ -144,9 +169,9 @@
 
 ;;implementation of while loops      
 (define mwhile
-  (lambda (lis state continue break return)
+  (lambda (lis state catch finally continue break return)
        (cond
-         [(mbool (cadr lis) state) (mwhile lis (truncstate (call/cc (lambda (continue) (mstate (cddr lis) state continue break return))) (len state)) continue break return)]
+         [(mbool (cadr lis) state) (mwhile lis (truncstate (call/cc (lambda (continue) (mstate (cddr lis) state catch finally continue break return))) (len state)) catch finally continue break return)]
          [else                     state])))
 
 ;; adds a value into the most recent state
