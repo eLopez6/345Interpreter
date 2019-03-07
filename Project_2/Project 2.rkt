@@ -2,7 +2,8 @@
 (require "simpleParser.rkt")
 
 (define emptystate (lambda () '(()())))
-(define startbreak (lambda () '()))
+(define startbreak '())
+(define startcontinue '())
 
 ;;where it starts
 (define main
@@ -11,22 +12,35 @@
       (lambda (k)
         (mstate (parser filename)
                 (list (emptystate))
+                startcontinue
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
 
 (define mstate
-  (lambda (lis state break return)
+  (lambda (lis state continue break return)
     (cond
       [(null? lis) state]
-      [(eq? (caar lis) 'return) (return (evaluate (cadar lis) state))]
-      [(eq? (caar lis) 'var)    (mstate (cdr lis) (instantiatevar (cdar lis) state) break return)]
-      [(eq? (caar lis) '=)      (mstate (cdr lis) (updatevar (cdar lis) state) break return)]
-      [(eq? (caar lis) 'if)     (mstate (cdr lis) (mif (car lis) state break return) break return)]
-      [(eq? (caar lis) 'while)  (mstate (cdr lis) (call/cc (lambda (break) (mwhile (car lis) state break return))) break return)]
-      [(eq? (caar lis) 'break)  (break state)]
-      [(eq? (caar lis) 'continue)  state]
-      [(eq? (caar lis) 'begin)  (mstate (cdr lis) (removestatelayer (mstate (cdar lis) (addstatelayer state) break return)) break return)])))
+      [(eq? (caar lis) 'return)
+       (return (evaluate (cadar lis) state))]
+      [(eq? (caar lis) 'var)
+       (mstate (cdr lis) (instantiatevar (cdar lis) state) continue break return)]
+      [(eq? (caar lis) '=)
+       (mstate (cdr lis) (updatevar (cdar lis) state) continue break return)]
+      [(eq? (caar lis) 'if)
+       (mstate (cdr lis) (mif (car lis) state continue break return) continue break return)]
+      [(eq? (caar lis) 'while)
+       (mstate (cdr lis) (truncstate (call/cc (lambda (break) (mwhile (car lis) state continue break return))) (len state)) continue break return)]
+      [(and (eq? (caar lis) 'break) (not (null? break)))
+       (break state)]
+      [(eq? (caar lis) 'break)
+       (error "Break Outside of Loop")]
+      [(and (eq? (caar lis) 'continue) (not (null? continue)))
+       (continue state)]
+      [(eq? (caar lis) 'continue)
+       (error "Continue Outside of Loop")]
+      [(eq? (caar lis) 'begin)
+       (mstate (cdr lis) (removestatelayer (mstate (cdar lis) (addstatelayer state) continue break return)) continue break return)])))
 
 
 ;adds a state to the list of states
@@ -38,6 +52,13 @@
 (define removestatelayer
   (lambda (state)
     (cdr state)))
+
+
+(define truncstate
+  (lambda (state length)
+    (cond
+      [(eq? (len state) length) state]
+      [else (truncstate (removestatelayer state) length)])))
 
 
 (define evaluate
@@ -95,11 +116,11 @@
 
 ;; for if statements
 (define mif
-  (lambda (lis state break return)
+  (lambda (lis state continue break return)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state break return)]
+      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state continue break return)]
       [(hasNestedIf lis)        (mif (cadddr lis) break state)]
-      [else                     (mstate (cdddr lis) state break return)])))
+      [else                     (mstate (cdddr lis) state continue break return)])))
 
 
 ;; checks if there's and else if
@@ -123,10 +144,10 @@
 
 ;;implementation of while loops      
 (define mwhile
-  (lambda (lis state break return)
-    (cond
-      [(mbool (cadr lis) state) (mwhile lis (mstate (cddr lis) state break return) break return)]
-      [else                     state])))
+  (lambda (lis state continue break return)
+       (cond
+         [(mbool (cadr lis) state) (mwhile lis (truncstate (call/cc (lambda (continue) (mstate (cddr lis) state continue break return))) (len state)) continue break return)]
+         [else                     state])))
 
 ;; adds a value into the most recent state
 (define addtostate
@@ -275,6 +296,16 @@
 (test 6 "../testfiles/2-8.txt")
 (test -1 "../testfiles/2-9.txt")
 (test 789 "../testfiles/2-10.txt")
+(testError "y: Used Before Declared" "../testfiles/2-11.txt")
+(testError "a: Used Before Declared" "../testfiles/2-12.txt")
+(testError "Break Outside of Loop" "../testfiles/2-13.txt")
+(test 12 "../testfiles/2-14.txt")
+(test 125 "../testfiles/2-15.txt")
+(test 110 "../testfiles/2-16.txt")
+(test 2000400 "../testfiles/2-17.txt")
+(test 101 "../testfiles/2-18.txt")
+(test 789 "../testfiles/2-19.txt")
+
 
 
 
