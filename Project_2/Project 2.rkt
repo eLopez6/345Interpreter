@@ -1,15 +1,16 @@
 #lang racket
 (require "simpleParser.rkt")
 
+;; Definitions for abstraction
 (define emptystate (lambda () '(()())))
 (define startcatch '())
 (define startfinally '())
 (define startcontinue '())
 (define startbreak '())
 
+;;; Main program
 
-
-;;where it starts
+;; Main function
 (define main
   (lambda (filename)
     (call/cc
@@ -22,45 +23,71 @@
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
-
+;; Mstate
 (define mstate
   (lambda (lis state catch finally continue break return)
     (cond
       [(null? lis) state]
       [(eq? (caar lis) 'return)
        (return (evaluate (cadar lis) state))]
+      
       [(eq? (caar lis) 'var)
-       (mstate (cdr lis) (instantiatevar (cdar lis) state) catch finally continue break return)]
+       (mstate (cdr lis)
+               (instantiatevar (cdar lis) state)
+               catch finally continue break return)]
+      
       [(eq? (caar lis) '=)
-       (mstate (cdr lis) (updatevar (cdar lis) state) catch finally continue break return)]
+       (mstate (cdr lis)
+               (updatevar (cdar lis) state)
+               catch finally continue break return)]
+      
       [(eq? (caar lis) 'begin)
-       (mstate (cdr lis) (removestatelayer (mstate (cdar lis) (addstatelayer state) catch finally continue break return)) catch finally continue break return)]
+       (mstate (cdr lis)
+               (removestatelayer (mstate (cdar lis) (addstatelayer state)
+                                         catch finally continue break return))
+               catch finally continue break return)]
+      
       [(eq? (caar lis) 'if)
-       (mstate (cdr lis) (mif (car lis) state catch finally continue break return) catch finally continue break return)]
+       (mstate (cdr lis)
+               (mif (car lis) state
+                    catch finally continue break return)
+               catch finally continue break return)]
+
       [(eq? (caar lis) 'while)
-       (mstate (cdr lis) (truncstate (call/cc (lambda (break) (mwhile (car lis) state catch finally continue break return))) (len state)) catch finally continue break return)]
+       (mstate (cdr lis)
+               (truncstate
+                (call/cc (lambda (break)
+                           (mwhile (car lis) state
+                                   catch finally continue break return)))
+                (len state))
+               catch finally continue break return)]
+      
       [(and (eq? (caar lis) 'break) (not (null? break)))
        (break state)]
+      
       [(eq? (caar lis) 'break)
        (error "Break Outside of Loop")]
+      
       [(and (eq? (caar lis) 'continue) (not (null? continue)))
        (continue state)]
+      
       [(eq? (caar lis) 'continue)
        (error "Continue Outside of Loop")]
-      [(and (eq? (caar lis) 'throw) (not (null? throw)))
-       (catch (evaluate (cadar lis) state))]
-      [(eq? (caar lis) 'throw)
-       (error "Throw Outside of try")])))
-
       
+      ;[(and (eq? (caar lis) 'throw) (not (null? throw)))
+       ;(catch (evaluate (cadar lis) state))]
+      
+      ;[(eq? (caar lis) 'throw)
+       ;(error "Throw Outside of try")]
+      )))     
 
 
-;adds a state to the list of states
+;; Adds a state to the list of states
 (define addstatelayer
   (lambda (state)
     (cons (emptystate) state)))
 
-;removes a layer from the list of states
+;; Removes a layer from the list of states
 (define removestatelayer
   (lambda (state)
     (cdr state)))
@@ -70,7 +97,7 @@
   (lambda (state length)
     (cond
       [(eq? (len state) length) state]
-      [else (truncstate (removestatelayer state) length)])))
+      [else                     (truncstate (removestatelayer state) length)])))
 
 (define mtcf
   (lambda (trylis catchlis finallylis state catch finally continue break return)
@@ -86,6 +113,7 @@
   ;(lambda (val state catch finally continue brea
 
 
+;; Evaluates the expression
 (define evaluate
   (lambda (lis state)
     (cond
@@ -99,44 +127,53 @@
 (define operand1 cadr)
 (define operand2 caddr)
 
-;; mvalue for math
+;; Mvalue for numeric operations
 (define mvalue
   (lambda (lis state)
-    (cond
-      [(number? lis)
-       lis]
-      [(not (list? lis))
-       (lookup-all lis state)]
-      [(eq? (operator lis) '+)
-       (+ (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(and (eq? (operator lis) '-) (eq? (len lis) 3))
-       (- (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))] ; subtractions
-      [(eq? (operator lis) '-)
-       (- (mvalue (operand1 lis) state))] ; negation
-      [(eq? (operator lis) '*)
-       (* (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '/)
-       (quotient (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '%)
-       (remainder (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))])))
+    ; f makes the code more readable, since the behavior is almost always (operator (operands)
+    ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
+    (let [(f (lambda (op)
+               (op (mvalue (operand1 lis) state)
+                   (mvalue (operand2 lis) state))))]
+      (cond
+        [(number? lis)
+                                      lis]
+        [(not (list? lis))
+                                      (lookup-all lis state)]
+        [(eq? (operator lis) '+)      (f +)]
+        [(and (eq? (operator lis) '-)
+              (eq? (len lis) 3))
+                                      (f -)]
+        [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state))] ; negation
+        [(eq? (operator lis) '*)      (f *)]
+        [(eq? (operator lis) '/)      (f quotient)]
+        [(eq? (operator lis) '%)      (f remainder)]))))
 
 
-;;mbool for boolean logic
+;; Mbool for boolean logic
 (define mbool
   (lambda (lis state)
-    (cond
-      [(boolean? lis)           lis]
-      [(not (list? lis))        (lookup-all lis state)]
-      [(eq? (operator lis) '>)  (> (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '>=) (>= (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '<)  (< (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '<=) (<= (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '==) (eq? (mvalue (operand1 lis) state) (mvalue (operand2 lis) state))]
-      [(eq? (operator lis) '!=) (not (eq? (mvalue (operand1 lis) state) (mvalue (operand2 lis) state)))]
-      [(eq? (operator lis) '&&) (and (mbool (operand1 lis) state) (mbool (operand2 lis) state))]
-      [(eq? (operator lis) '||) (or (mbool (operand1 lis) state) (mbool (operand2 lis) state))]
-      [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state))])))
-
+    ; f and b just make the code more readable
+    ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
+    ; b applies the input comparison to the mbool of the expression
+    (let [(f (lambda (op)
+              (op (mvalue (operand1 lis) state)
+                  (mvalue (operand2 lis) state))))
+          (b (lambda (op)
+               (op (mbool (operand1 lis) state)
+                   (mbool (operand2 lis) state))))]
+      (cond
+        [(boolean? lis)           lis]
+        [(not (list? lis))        (lookup-all lis state)]
+        [(eq? (operator lis) '>)  (f >)]
+        [(eq? (operator lis) '>=) (f >=)]
+        [(eq? (operator lis) '<)  (f <)]
+        [(eq? (operator lis) '<=) (f <=)]
+        [(eq? (operator lis) '==) (f (lambda (x y) (eq? x y)))]
+        [(eq? (operator lis) '!=) (f (lambda (x y) (not (eq? x y))))] 
+        [(eq? (operator lis) '&&) (b (lambda (x y) (and x y)))] ; since and is a macro, need to wrap in lambda
+        [(eq? (operator lis) '||) (b (lambda (x y) (or x y)))] ; since or is a macro, need to wrap in lambda
+        [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state))]))))
 
 
 ;; for if statements
@@ -148,33 +185,53 @@
       [else                     (mstate (cdddr lis) state catch finally continue break return)])))
 
 
-;; checks if there's and else if
+;; Checks if there's and else if
 (define hasNestedIf
   (lambda (lis)
-    (and (>= (len lis) 4) (eq? (car (cadddr lis)) 'if))))
+    (and (>= (len lis) 4)
+         (eq? (car (cadddr lis)) 'if))))
 
 
-;; calc length using accumulator
+;; Calculates length using accumulator
 (define len-acc
   (lambda (lis acc)
     (if (null? lis)
         acc
         (len-acc (cdr lis) (+ 1 acc)))))
 
+
+;; Calculates the length of a list
 (define len
   (lambda (lis)
     (len-acc lis 0)))
 
 
-
-;;implementation of while loops      
+;; Mwhile    
 (define mwhile
   (lambda (lis state catch finally continue break return)
        (cond
-         [(mbool (cadr lis) state) (mwhile lis (truncstate (call/cc (lambda (continue) (mstate (cddr lis) state catch finally continue break return))) (len state)) catch finally continue break return)]
+         [(mbool (cadr lis) state)
+          (mwhile lis
+                  (truncstate
+                   (call/cc
+                    (lambda (continue)
+                      (mstate (cddr lis)
+                              state
+                              catch
+                              finally
+                              continue
+                              break
+                              return)))
+                   (len state))
+                  catch
+                  finally
+                  continue
+                  break
+                  return)]
          [else                     state])))
 
-;; adds a value into the most recent state
+
+;; Adds a value into the most recent state
 (define addtostate
   (lambda (val state)
     (cons
@@ -201,7 +258,9 @@
     (cond
       [(null? (car state))    #f]
       [(eq? (caar state) var) #t]
-      [else                   (checkexists var (cons (cdar state) (list (cdadr state))))])))
+      [else                   (checkexists var
+                                           (cons (cdar state)
+                                                 (list (cdadr state))))])))
 
 
 ;; default use of updatevar
@@ -217,12 +276,20 @@
       [(null? state)
        (error (car lis) "Used Before Declared")]
       [(checkexists (car lis) (car state))
-       (append acc (cons (updatevar-acc (car lis) (evaluate (cadr lis) all-state) (car state) (emptystate)) (cdr state)))]
+       (append acc (cons (updatevar-acc (car lis)
+                                        (evaluate (cadr lis) all-state)
+                                        (car state)
+                                        (emptystate))
+                         (cdr state)))]
       [else
-       (updatevar-all-acc lis (cdr state) all-state (append acc (list (car state))))])))
+       (updatevar-all-acc lis
+                          (cdr state)
+                          all-state
+                          (append acc
+                                  (list (car state))))])))
 
 
-;; set variable for single state
+;; Set variable for single state
 (define updatevar-acc
   (lambda (var val state acc)
     (cond
@@ -230,30 +297,41 @@
       [(eq? (caar state) var)
         (updatevar-acc var
                        val
-                       (cons (cdar state) (list (cdadr state)))
-                       (cons (cons (caar state) (car acc)) (list (cons val (cadr acc)))))]
+                       (cons (cdar state)
+                             (list (cdadr state)))
+                       (cons (cons (caar state)
+                                   (car acc))
+                             (list (cons val
+                                         (cadr acc)))))]
       [else
        (updatevar-acc var
                       val
-                      (cons (cdar state) (list (cdadr state)))
-                      (cons (cons (caar state) (car acc)) (list (cons (caadr state) (cadr acc)))))])))
+                      (cons (cdar state)
+                            (list (cdadr state)))
+                      (cons (cons (caar state)
+                                  (car acc))
+                            (list (cons (caadr state)
+                                        (cadr acc)))))])))
 
 
-;;finds saved value of var
+;; Finds saved value of var within a state
 (define lookup
   (lambda (var state break)
     (cond
-      [(eq? var 'true)                                    (break #t)]
-      [(eq? var 'false)                                   (break #f)] 
-      [(null? (car state))                                '()]
-      [(and (eq? (caar state) var) (null? (caadr state))) (error var "Use Before Assigning")]
-      [(eq? (caar state) var)                             (break (caadr state))]
-      [else                                               (lookup var
-                                                                  (cons (cdar state) (list (cdadr state)))
-                                                                  break)])))
+      [(eq? var 'true)             (break #t)]
+      [(eq? var 'false)            (break #f)] 
+      [(null? (car state))         '()]
+      [(and (eq? (caar state) var)
+            (null? (caadr state))) (error var "Use Before Assigning")]
+      [(eq? (caar state) var)      (break (caadr state))] ; return the var's value
+      [else                        (lookup var
+                                           (cons (cdar state)
+                                                 (list (cdadr state)))
+                                           break)])))
 
-; if lookup finds something, a break is called
-; otherwise, no variable var exists in state
+
+; If lookup finds the var, a break is called
+; Otherwise, no variable var exists in state and an error is raised.
 (define lookup-all
   (lambda (var state)
     (call/cc
@@ -263,7 +341,7 @@
           (error var "Used Before Declared")])))))
 
       
-;;checks if atom is the same as any atom in a list (not * for a reason)
+;; Checks if atom is the same as any atom in a list (not * for a reason)
 (define isincluded
   (lambda (a lis)
     (cond
@@ -274,21 +352,26 @@
 
 
 
+;;; Test Suite for Project 2
 
-
-
+;; Validates that test evaluates to correct output. Throws an error if it does not.
 (define test
   (lambda (val file)
     (cond
       [(not (eq? val (main file))) (error "TEST FAILED" file)])))
 
-(require racket/exn)
+;; Validates that a test throws the correct error. 
+(require racket/exn) ; required library for converting to exception to String
 (define testError
   (lambda (err file)
     (cond
-      [(with-handlers ([exn:fail? (lambda (exn) (not (string-contains? (exn->string exn) err)))]) (main file)) (error "TEST FAILED" file)])))
+      [(with-handlers ([exn:fail?
+                        (lambda (exn)
+                          (not (string-contains? (exn->string exn) err)))])
+         (main file))
+       (error "TEST FAILED" file)])))
 
-
+; Project 1 Tests
 (test 150 "../testfiles/1.txt")
 (test -4 "../testfiles/2.txt")
 (test 10 "../testfiles/3.txt")
@@ -310,7 +393,7 @@
 (test 128 "../testfiles/19.txt")
 (test 12 "../testfiles/20.txt")
 
-
+; Project 2 Tests
 (test 20 "../testfiles/2-1.txt")
 (test 164 "../testfiles/2-2.txt")
 (test 32 "../testfiles/2-3.txt")
