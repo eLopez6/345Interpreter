@@ -126,7 +126,7 @@
                  catch finally continue break return))) ; conts for evalfinally
 
 
-; Evaluate the full try block
+;; Evaluate the full try block
 (define evaltry
   (lambda (trylis state catch finally continue break return)
     (if (null? trylis)
@@ -370,8 +370,8 @@
                                            break)])))
 
 
-; If lookup finds the var, a break is called
-; Otherwise, no variable var exists in state and an error is raised.
+;; If lookup finds the var, a break is called
+;; Otherwise, no variable var exists in state and an error is raised.
 (define lookup-all
   (lambda (var state)
     (call/cc
@@ -395,64 +395,64 @@
 ;;; Test Suite for Project 2
 
 ;; Validates that test evaluates to correct output. Throws an error if it does not.
-(define test
-  (lambda (val file)
-    (cond
-      [(not (eq? val (main file))) (error "TEST FAILED" file)])))
+;(define test
+  ;(lambda (val file)
+    ;(cond
+      ;[(not (eq? val (main file))) (error "TEST FAILED" file)])))
 
 ;; Validates that a test throws the correct error. 
-(require racket/exn) ; required library for converting to exception to String
-(define testError
-  (lambda (err file)
-    (cond
-      [(with-handlers ([exn:fail?
-                        (lambda (exn)
-                          (not (string-contains? (exn->string exn) err)))])
-         (main file))
-       (error "TEST FAILED" file)])))
+;(require racket/exn) ; required library for converting to exception to String
+;(define testError
+  ;(lambda (err file)
+    ;(cond
+      ;[(with-handlers ([exn:fail?
+                        ;(lambda (exn)
+                          ;(not (string-contains? (exn->string exn) err)))])
+         ;(main file))
+       ;(error "TEST FAILED" file)])))
 
-; Project 1 Tests
-(test 150 "../testfiles/1.txt")
-(test -4 "../testfiles/2.txt")
-(test 10 "../testfiles/3.txt")
-(test 16 "../testfiles/4.txt")
-(test 220 "../testfiles/5.txt")
-(test 5 "../testfiles/6.txt")
-(test 6 "../testfiles/7.txt")
-(test 10 "../testfiles/8.txt")
-(test 5 "../testfiles/9.txt")
-(test -39 "../testfiles/10.txt")
-(testError "y: Used Before Declared" "../testfiles/11.txt")
-(testError "x: Used Before Declared" "../testfiles/12.txt")
-(testError "x: Use Before Assigning" "../testfiles/13.txt")
-(testError "x: Redefining a variable" "../testfiles/14.txt")
-(test 'true "../testfiles/15.txt")
-(test 100 "../testfiles/16.txt")
-(test 'false "../testfiles/17.txt")
-(test 'true "../testfiles/18.txt")
-(test 128 "../testfiles/19.txt")
-(test 12 "../testfiles/20.txt")
+;; Project 1 Tests
+;(test 150 "../testfiles/1.txt")
+;(test -4 "../testfiles/2.txt")
+;(test 10 "../testfiles/3.txt")
+;(test 16 "../testfiles/4.txt")
+;(test 220 "../testfiles/5.txt")
+;(test 5 "../testfiles/6.txt")
+;(test 6 "../testfiles/7.txt")
+;(test 10 "../testfiles/8.txt")
+;(test 5 "../testfiles/9.txt")
+;(test -39 "../testfiles/10.txt")
+;(testError "y: Used Before Declared" "../testfiles/11.txt")
+;(testError "x: Used Before Declared" "../testfiles/12.txt")
+;(testError "x: Use Before Assigning" "../testfiles/13.txt")
+;(testError "x: Redefining a variable" "../testfiles/14.txt")
+;(test 'true "../testfiles/15.txt")
+;(test 100 "../testfiles/16.txt")
+;(test 'false "../testfiles/17.txt")
+;(test 'true "../testfiles/18.txt")
+;(test 128 "../testfiles/19.txt")
+;(test 12 "../testfiles/20.txt")
 
 ; Project 2 Tests
-(test 20 "../testfiles/2-1.txt")
-(test 164 "../testfiles/2-2.txt")
-(test 32 "../testfiles/2-3.txt")
-(test 2 "../testfiles/2-4.txt")
-(testError "min: Used Before Declared" "../testfiles/2-5.txt")
-(test 25 "../testfiles/2-6.txt")
-(test 21 "../testfiles/2-7.txt")
-(test 6 "../testfiles/2-8.txt")
-(test -1 "../testfiles/2-9.txt")
-(test 789 "../testfiles/2-10.txt")
-(testError "y: Used Before Declared" "../testfiles/2-11.txt")
-(testError "a: Used Before Declared" "../testfiles/2-12.txt")
-(testError "Break Outside of Loop" "../testfiles/2-13.txt")
-(test 12 "../testfiles/2-14.txt")
-(test 125 "../testfiles/2-15.txt")
-(test 110 "../testfiles/2-16.txt")
-(test 2000400 "../testfiles/2-17.txt")
-(test 101 "../testfiles/2-18.txt")
-(testError "Throw Outside of try" "../testfiles/2-19.txt")
+;(test 20 "../testfiles/2-1.txt")
+;(test 164 "../testfiles/2-2.txt")
+;(test 32 "../testfiles/2-3.txt")
+;(test 2 "../testfiles/2-4.txt")
+;(testError "min: Used Before Declared" "../testfiles/2-5.txt")
+;(test 25 "../testfiles/2-6.txt")
+;(test 21 "../testfiles/2-7.txt")
+;(test 6 "../testfiles/2-8.txt")
+;(test -1 "../testfiles/2-9.txt")
+;(test 789 "../testfiles/2-10.txt")
+;(testError "y: Used Before Declared" "../testfiles/2-11.txt")
+;(testError "a: Used Before Declared" "../testfiles/2-12.txt")
+;(testError "Break Outside of Loop" "../testfiles/2-13.txt")
+;(test 12 "../testfiles/2-14.txt")
+;(test 125 "../testfiles/2-15.txt")
+;(test 110 "../testfiles/2-16.txt")
+;(test 2000400 "../testfiles/2-17.txt")
+;(test 101 "../testfiles/2-18.txt")
+;(testError "Throw Outside of try" "../testfiles/2-19.txt")
 
 
 
