@@ -23,6 +23,7 @@
                 startbreak
                 (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
+
 ;; Mstate
 (define mstate
   (lambda (lis state catch finally continue break return)
@@ -82,12 +83,12 @@
                      state catch finally continue break return)
                catch finally continue break return)] 
       
-      [(and (eq? (caar lis) 'throw) (not (null? catch)))
+      [(and (eq? (caar lis) 'throw)
+            (not (null? catch)))
        (catch (cons (list (evaluate (cadar lis) state)) state))]
       
       [(eq? (caar lis) 'throw)
-       (error "Throw Outside of try")]
-      )))     
+       (error "Throw Outside of try")])))     
 
 
 ;; Adds a state to the list of states
@@ -120,17 +121,18 @@
                                (call/cc
                                 (lambda (catch)
                                   (evaltry trylis
-                                           state catch finally continue break return)))
-                               catch finally continue break return)))
-                 catch finally continue break return)))
+                                           state catch finally continue break return))) ; conts for evaltry
+                               catch finally continue break return))) ; conts for evalcatch
+                 catch finally continue break return))) ; conts for evalfinally
 
 
 ; Evaluate the full try block
 (define evaltry
   (lambda (trylis state catch finally continue break return)
     (if (null? trylis)
-        state ; not correct
-        (finally (removestatelayer (mstate trylis (addstatelayer state)
+        state
+        (finally (removestatelayer (mstate trylis
+                                           (addstatelayer state)
                                            catch finally continue break return))))))
 
 
@@ -139,9 +141,10 @@
   (lambda (catchlis state catch finally continue break return)
     (if (null? catchlis)
         state
-        (finally (removestatelayer (mstate (caddr catchlis) (instantiatevar
-                                                            (append (cadr catchlis) (car state))
-                                                            (addstatelayer (cdr state)))
+        (finally (removestatelayer (mstate (caddr catchlis)
+                                           (instantiatevar
+                                            (append (cadr catchlis) (car state))
+                                            (addstatelayer (cdr state)))
                                            catch finally continue break return))))))
 
 
@@ -150,24 +153,24 @@
   (lambda (finallylis state catch finally continue break return)
     (if (null? finallylis)
         state
-        (removestatelayer (mstate (cadr finallylis) (addstatelayer state)
+        (removestatelayer (mstate (cadr finallylis)
+                                  (addstatelayer state)
                                   catch finally continue break return)))))
-       
 
+; abstractions for operators and operands
+(define operator car)
+(define operand1 cadr)
+(define operand2 caddr)
 
 ;; Evaluates the expression
 (define evaluate
   (lambda (lis state)
     (cond
-      [(or (boolean? lis) (number? lis))              lis]
-      [(not (list? lis))                              (lookup-all lis state)]
-      [(isincluded (car lis) '(+ - * / %))            (mvalue lis state)]
-      [(isincluded (car lis) '(> >= < <= == || && !)) (mbool lis state)])))
+      [(or (boolean? lis) (number? lis))                   lis]
+      [(not (list? lis))                                   (lookup-all lis state)]
+      [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state)]
+      [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state)])))
 
-
-(define operator car)
-(define operand1 cadr)
-(define operand2 caddr)
 
 ;; Mvalue for numeric operations
 (define mvalue
@@ -212,7 +215,7 @@
         [(eq? (operator lis) '<)  (f <)]
         [(eq? (operator lis) '<=) (f <=)]
         [(eq? (operator lis) '==) (f (lambda (x y) (eq? x y)))]
-        [(eq? (operator lis) '!=) (f (lambda (x y) (not (eq? x y))))] 
+        [(eq? (operator lis) '!=) (f (lambda (x y) (not (eq? x y))))]
         [(eq? (operator lis) '&&) (b (lambda (x y) (and x y)))] ; since and is a macro, need to wrap in lambda
         [(eq? (operator lis) '||) (b (lambda (x y) (or x y)))] ; since or is a macro, need to wrap in lambda
         [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state))]))))
@@ -222,9 +225,12 @@
 (define mif
   (lambda (lis state catch finally continue break return)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis)) state catch finally continue break return)]
-      [(hasNestedIf lis)        (mif (cadddr lis) state catch finally continue break return)]
-      [else                     (mstate (cdddr lis) state catch finally continue break return)])))
+      [(mbool (cadr lis) state) (mstate (list (caddr lis))
+                                        state catch finally continue break return)]
+      [(hasNestedIf lis)        (mif (cadddr lis)
+                                     state catch finally continue break return)]
+      [else                     (mstate (cdddr lis)
+                                        state catch finally continue break return)])))
 
 
 ;; Checks if there's and else if
@@ -251,26 +257,18 @@
 ;; Mwhile    
 (define mwhile
   (lambda (lis state catch finally continue break return)
-       (cond
-         [(mbool (cadr lis) state)
-          (mwhile lis
-                  (truncstate
-                   (call/cc
-                    (lambda (continue)
-                      (mstate (cddr lis)
-                              state
-                              catch
-                              finally
-                              continue
-                              break
-                              return)))
-                   (len state))
-                  catch
-                  finally
-                  continue
-                  break
-                  return)]
-         [else                     state])))
+    (cond
+      [(mbool (cadr lis) state)
+       (mwhile lis
+               (truncstate
+                (call/cc
+                 (lambda (continue)
+                   (mstate (cddr lis)
+                           state catch finally continue break return)))
+                (len state))
+               catch finally continue break return)]
+      [else
+       state])))
 
 
 ;; Adds a value into the most recent state
@@ -455,7 +453,6 @@
 (test 2000400 "../testfiles/2-17.txt")
 (test 101 "../testfiles/2-18.txt")
 (testError "Throw Outside of try" "../testfiles/2-19.txt")
-;(test 21 "../testfiles/2-20.txt")
 
 
 
