@@ -82,11 +82,11 @@
                      state catch finally continue break return)
                catch finally continue break return)] 
       
-      ;[(and (eq? (caar lis) 'throw) (not (null? throw)))
-       ;(catch (evaluate (cadar lis) state))]
+      [(and (eq? (caar lis) 'throw) (not (null? catch)))
+       (catch (cons (list (evaluate (cadar lis) state)) state))]
       
-      ;[(eq? (caar lis) 'throw)
-       ;(error "Throw Outside of try")]
+      [(eq? (caar lis) 'throw)
+       (error "Throw Outside of try")]
       )))     
 
 
@@ -139,7 +139,9 @@
   (lambda (catchlis state catch finally continue break return)
     (if (null? catchlis)
         state
-        (finally (removestatelayer (mstate (cadr catchlis) (addstatelayer state)
+        (finally (removestatelayer (mstate (caddr catchlis) (instantiatevar
+                                                            (append (cadr catchlis) (car state))
+                                                            (addstatelayer (cdr state)))
                                            catch finally continue break return))))))
 
 
@@ -221,7 +223,7 @@
   (lambda (lis state catch finally continue break return)
     (cond
       [(mbool (cadr lis) state) (mstate (list (caddr lis)) state catch finally continue break return)]
-      [(hasNestedIf lis)        (mif (cadddr lis) break state)]
+      [(hasNestedIf lis)        (mif (cadddr lis) state catch finally continue break return)]
       [else                     (mstate (cdddr lis) state catch finally continue break return)])))
 
 
@@ -448,11 +450,12 @@
 (testError "a: Used Before Declared" "../testfiles/2-12.txt")
 (testError "Break Outside of Loop" "../testfiles/2-13.txt")
 (test 12 "../testfiles/2-14.txt")
-(test 100 "../testfiles/2-15.txt")
-;(test 110 "../testfiles/2-16.txt")
-;(test 2000400 "../testfiles/2-17.txt")
-;(test 101 "../testfiles/2-18.txt")
-;(test 789 "../testfiles/2-19.txt")
+(test 125 "../testfiles/2-15.txt")
+(test 110 "../testfiles/2-16.txt")
+(test 2000400 "../testfiles/2-17.txt")
+(test 101 "../testfiles/2-18.txt")
+(testError "Throw Outside of try" "../testfiles/2-19.txt")
+;(test 21 "../testfiles/2-20.txt")
 
 
 
