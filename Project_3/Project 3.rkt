@@ -3,6 +3,7 @@
 (require "functionParser.rkt")
 
 ;; Definitions for abstraction
+(define emptyenviro (lambda () '(()())))
 (define emptystate (lambda () '(()())))
 (define startcatch '())
 (define startfinally '())
@@ -15,15 +16,60 @@
 (define main
   (lambda (filename)
     (call/cc
-      (lambda (k)
-        (mstate (parser filename)
-                (list (emptystate))
-                startcatch
-                startfinally
-                startcontinue
-                startbreak
-                (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
+     (lambda (k)
+       ((menvironment (parser filename) (list (emptyenviro)) k))))))
+;    (call/cc
+ ;     (lambda (k)
+  ;      (mstate (parser filename)
+   ;             (list (emptystate))
+    ;            startcatch
+     ;           startfinally
+      ;          startcontinue
+;                startbreak
+       ;         (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
 
+(define menvironment
+  (lambda (lis enviro mainreturn)
+    (cond
+      [(eq? (caar lis) 'var)
+       (menvironment (cdr lis)
+                     (mstate (list (car lis))
+                                   enviro
+                                   '()
+                                   '()
+                                   '()
+                                   '()
+                                   '())
+                     mainreturn)]
+      [(and (eq? (caar lis) 'function) (eq? (functionname (car lis)) 'main)) 
+       (mstate (functionbody (car lis))
+               enviro
+               startcatch
+               startfinally
+               startcontinue
+               startbreak
+               (lambda (val) (mainreturn (if (number? val) val (if val 'true 'false)))))]
+       [(eq? (caar lis) 'function)  (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)])))
+
+(define functionname
+  (lambda lis
+    (cadar lis)))
+
+(define functionparam
+  (lambda lis
+    (caddar lis)))
+
+(define functionbody
+  (lambda lis
+    (caddr (cdar lis))))
+
+(define createfunction
+  (lambda (lis enviro)
+    (cond
+      [(checkexists (functionname lis)  (car enviro))
+       (error (car lis) "Redefining a function")]
+      [else
+       (cons (cons (cons (functionname lis) (caar enviro)) (list (cons (list (functionparam lis) (functionbody lis)) (cadar enviro) 'functionthatcreateseviro))) (cdr enviro))]))) 
 
 
 ;; Mstate
@@ -397,21 +443,21 @@
 ;;; Test Suite for Project 2
 
 ;; Validates that test evaluates to correct output. Throws an error if it does not.
-;(define test
-  ;(lambda (val file)
-    ;(cond
-      ;[(not (eq? val (main file))) (error "TEST FAILED" file)])))
+(define test
+  (lambda (val file)
+    (cond
+      [(not (eq? val (main file))) (error "TEST FAILED" file)])))
 
 ;; Validates that a test throws the correct error. 
-;(require racket/exn) ; required library for converting to exception to String
-;(define testError
-  ;(lambda (err file)
-    ;(cond
-      ;[(with-handlers ([exn:fail?
-                        ;(lambda (exn)
-                          ;(not (string-contains? (exn->string exn) err)))])
-         ;(main file))
-       ;(error "TEST FAILED" file)])))
+(require racket/exn) ; required library for converting to exception to String
+(define testError
+  (lambda (err file)
+    (cond
+      [(with-handlers ([exn:fail?
+                        (lambda (exn)
+                          (not (string-contains? (exn->string exn) err)))])
+         (main file))
+       (error "TEST FAILED" file)])))
 
 ;; Project 1 Tests
 ;(test 150 "../testfiles/1.txt")
@@ -456,7 +502,27 @@
 ;(test 101 "../testfiles/2-18.txt")
 ;(testError "Throw Outside of try" "../testfiles/2-19.txt")
 
-
+; Project 3 Tests
+(test 10 "../testfiles/3-1.txt")
+(test 14 "../testfiles/3-2.txt")
+(test 45 "../testfiles/3-3.txt")
+(test 55 "../testfiles/3-4.txt")
+(test 1 "../testfiles/3-5.txt")
+(test 115 "../testfiles/3-6.txt")
+(test 'true' "../testfiles/3-7.txt")
+(test 20 "../testfiles/3-8.txt")
+(test 24 "../testfiles/3-9.txt")
+(test 2 "../testfiles/3-10.txt")
+(test 35 "../testfiles/3-11.txt")
+(testError "..." "../testfiles/3-12.txt")
+(test 90 "../testfiles/3-13.txt")
+(test 69 "../testfiles/3-14.txt")
+(test 87 "../testfiles/3-15.txt")
+(test 64 "../testfiles/3-16.txt")
+(testError "..." "../testfiles/3-17.txt")
+(test 125 "../testfiles/3-18.txt")
+(testError "..." "../testfiles/3-19.txt")
+(test 2000400 "../testfiles/3-18.txt")
 
 
 
