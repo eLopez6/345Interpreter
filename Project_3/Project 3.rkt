@@ -1,4 +1,8 @@
 #lang racket
+;Mark Goldberg
+;Emilio Lopez
+;Jacob Alspaw
+
 ;(require "simpleParser.rkt")
 (require "functionParser.rkt")
 
@@ -17,21 +21,15 @@
   (lambda (filename)
     (call/cc
      (lambda (k)
-       ((menvironment (parser filename) (list (emptyenviro)) k))))))
-;    (call/cc
- ;     (lambda (k)
-  ;      (mstate (parser filename)
-   ;             (list (emptystate))
-    ;            startcatch
-     ;           startfinally
-      ;          startcontinue
-;                startbreak
-       ;         (lambda (val) (k (if (number? val) val (if val 'true 'false)))))))))
+       (menvironment (parser filename) (list (emptyenviro)) k)))))
+
 
 (define menvironment
   (lambda (lis enviro mainreturn)
     (cond
-      [(eq? (caar lis) 'var)
+      [(null? lis) enviro];(mainreturn (runfunction 'main '() enviro))]
+      [(eq? (caar lis) 'function)  (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)]
+      [else
        (menvironment (cdr lis)
                      (mstate (list (car lis))
                                    enviro
@@ -40,28 +38,20 @@
                                    '()
                                    '()
                                    '())
-                     mainreturn)]
-      [(and (eq? (caar lis) 'function) (eq? (functionname (car lis)) 'main)) 
-       (mstate (functionbody (car lis))
-               enviro
-               startcatch
-               startfinally
-               startcontinue
-               startbreak
-               (lambda (val) (mainreturn (if (number? val) val (if val 'true 'false)))))]
-       [(eq? (caar lis) 'function)  (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)])))
+                     mainreturn)])))
+
 
 (define functionname
-  (lambda lis
-    (cadar lis)))
+  (lambda (lis)
+    (cadr lis)))
 
 (define functionparam
-  (lambda lis
-    (caddar lis)))
+  (lambda (lis)
+    (caddr lis)))
 
 (define functionbody
-  (lambda lis
-    (caddr (cdar lis))))
+  (lambda (lis)
+    (cadddr lis)))
 
 (define createfunction
   (lambda (lis enviro)
@@ -69,7 +59,35 @@
       [(checkexists (functionname lis)  (car enviro))
        (error (car lis) "Redefining a function")]
       [else
-       (cons (cons (cons (functionname lis) (caar enviro)) (list (cons (list (functionparam lis) (functionbody lis)) (cadar enviro) 'functionthatcreateseviro))) (cdr enviro))]))) 
+       (cons (cons (cons (functionname lis) (caar enviro))
+                   (list (cons
+                          (list (functionparam lis)
+                                (functionbody lis)
+                                (lambda (params currentenviro)
+                                  (list (functionparam lis) (getparamval params currentenviro))))
+                          (cadar enviro))))
+                   (cdr enviro))])))
+
+
+(define runfunction
+  (lambda (funcname paramlis enviro)
+    (call/cc
+     (lambda (startreturn)
+       (mstate (cadr (lookup-all funcname enviro))
+               (cons ((caddr (lookup-all funcname enviro)) paramlis enviro) enviro)
+               startcatch
+               startfinally
+               startcontinue
+               startbreak
+               startreturn)))))
+
+
+(define getparamval
+  (lambda (lis enviro)
+    (cond
+      [(null? lis) '()]
+      [else (cons (evaluate (car lis) enviro) (getparamval (cdr lis) enviro))])))
+
 
 
 ;; Mstate
@@ -136,7 +154,10 @@
        (catch (cons (list (evaluate (cadar lis) state)) state))]
       
       [(eq? (caar lis) 'throw)
-       (error "Throw Outside of try")])))     
+       (error "Throw Outside of try")]
+      
+      [(eq? (caar lis) 'funcall)
+       (evaluate (car lis) state)])))     
 
 
 ;; Adds a state to the list of states
@@ -217,7 +238,8 @@
       [(or (boolean? lis) (number? lis))                   lis]
       [(not (list? lis))                                   (lookup-all lis state)]
       [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state)]
-      [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state)])))
+      [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state)]
+      [(eq? (operator lis) 'funcall)                       (runfunction (cadr lis) (caddr lis) state)])))
 
 
 ;; Mvalue for numeric operations
