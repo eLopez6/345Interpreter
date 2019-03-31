@@ -239,7 +239,7 @@
       [(not (list? lis))                                   (lookup-all lis state)]
       [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state)]
       [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state)]
-      [(eq? (operator lis) 'funcall)                       (runfunction (cadr lis) (cddr lis) state)])))
+      [(eq? (operator lis) 'funcall)                       (runfunction (cadr lis) (getparamval (cddr lis) state) (truncstate state 1))])))
 
 
 ;; Mvalue for numeric operations
@@ -525,10 +525,10 @@
 ;(testError "Throw Outside of try" "../testfiles/2-19.txt")
 
 ; Project 3 Tests
-;(test 10 "../testfiles/3-1.txt")
-;(test 14 "../testfiles/3-2.txt")
-;(test 45 "../testfiles/3-3.txt")
-;(test 55 "../testfiles/3-4.txt")
+(test 10 "../testfiles/3-1.txt")
+(test 14 "../testfiles/3-2.txt")
+(test 45 "../testfiles/3-3.txt")
+(test 55 "../testfiles/3-4.txt")
 (test 1 "../testfiles/3-5.txt")
 (test 115 "../testfiles/3-6.txt")
 (test 'true' "../testfiles/3-7.txt")
