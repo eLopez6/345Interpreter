@@ -19,9 +19,17 @@
 ;; Main function
 (define main
   (lambda (filename)
-    (call/cc
-     (lambda (k)
-       (menvironment (parser filename) (list (emptyenviro)) k)))))
+    (checkbool
+     (call/cc
+      (lambda (k)
+        (menvironment (parser filename) (list (emptyenviro)) k))))))
+
+(define checkbool
+  (lambda (val)
+    (cond
+      [(eq? val #t)   'true]
+      [(eq? val #f)   'false]
+      [else           val])))
 
 
 (define menvironment
