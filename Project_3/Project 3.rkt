@@ -24,6 +24,7 @@
       (lambda (k)
         (menvironment (parser filename) (list (emptyenviro)) k))))))
 
+
 (define checkbool
   (lambda (val)
     (cond
@@ -35,68 +36,91 @@
 (define menvironment
   (lambda (lis enviro mainreturn)
     (cond
-      [(null? lis) (mainreturn (car (runfunction 'main '() enviro)))]
+      [(null? lis) (mainreturn (car (runfunction 'main (lookup-all 'main enviro) '() enviro startcatch startfinally)))]
       [(eq? (caar lis) 'function)  (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)]
-      [else
-       (menvironment (cdr lis)
-                     (mstate (list (car lis))
-                                   enviro
-                                   '()
-                                   '()
-                                   '()
-                                   '()
-                                   '())
-                     mainreturn)])))
+      [(eq? (caar lis) 'var) (menvironment (cdr lis) (instantiatevar (cdar lis) enviro startcatch startfinally) mainreturn)])))
 
 
 (define functionname
   (lambda (lis)
     (cadr lis)))
 
+
 (define functionparam
   (lambda (lis)
     (caddr lis)))
+
 
 (define functionbody
   (lambda (lis)
     (cadddr lis)))
 
+
 (define createfunction
-  (lambda (lis enviro)
+  (lambda (lis state)
     (cond
-      [(checkexists (functionname lis)  (car enviro))
+      [(checkexists (functionname lis)  (car state))
        (error (car lis) "Redefining a function")]
       [else
-       (cons (cons (cons (functionname lis) (caar enviro))
+       (cons (cons (cons (functionname lis) (caar state))
                    (list (cons
                           (list (functionparam lis)
                                 (functionbody lis)
-                                (lambda (params currentenviro)
-                                  (list (functionparam lis) (getparamval params currentenviro))))
-                          (cadar enviro))))
-                   (cdr enviro))])))
+                                getfunctionstate)
+                          (cadar state))))
+                   (cdr state))])))
 
 
-(define runfunction
-  (lambda (funcname paramlis enviro)
-    (call/cc
-     (lambda (startreturn)
-       (mstate (cadr (lookup-all funcname enviro))
-               (cons ((caddr (lookup-all funcname enviro)) paramlis enviro) enviro)
-               startcatch
-               startfinally
-               startcontinue
-               startbreak
-               startreturn)))))
+(define getfunctionstate
+  (lambda (name paramnames paramvals state catch finally)
+    (if (eq? (len paramnames) (len paramvals))
+        (cons (list paramnames (getparamval paramvals state catch finally)) (stateatfunctiondeclared name state))
+        (error "Mismatched parameters and arguments"))))
+
+
+(define stateatfunctiondeclared
+  (lambda (name state)
+    (if (checkexists name (car state))
+        state
+        (stateatfunctiondeclared name (cdr state)))))
+
+
+(define statebeforefunctiondeclared
+  (lambda (name state)
+    (if (checkexists name (car state))
+        '()
+        (cons (car state) (statebeforefunctiondeclared name (cdr state))))))
 
 
 (define getparamval
-  (lambda (lis enviro)
+  (lambda (lis state catch finally)
     (cond
       [(null? lis) '()]
-      [else (cons (evaluate (car lis) enviro) (getparamval (cdr lis) enviro))])))
+      [else        (cons (evaluate (car lis) state catch finally) (getparamval (cdr lis) state catch finally))])))
 
 
+(define runfunction
+  (lambda (funcname closure paramvals state catch finally)
+    (updatestateafterfunctioncall funcname
+                                  state
+                                  (call/cc
+                                   (lambda (startreturn)
+                                     (mstate (cadr closure)
+                                             ((caddr closure) funcname (car closure) paramvals state catch finally)
+                                             catch
+                                             finally
+                                             startcontinue
+                                             startbreak
+                                             startreturn))))))
+
+(define updatestateafterfunctioncall
+  (lambda (name oldstate newstate)
+    (cond
+      [(not (list? (car newstate)))
+       (cons (car newstate) (append (statebeforefunctiondeclared name oldstate) (cddr newstate)))] ;condition for return
+      [else
+       (cons '() (append (statebeforefunctiondeclared name oldstate) (cdr newstate)))]))) ;condition for no return
+    
 
 ;; Mstate
 (define mstate
@@ -104,23 +128,17 @@
     (cond
       [(null? lis) state]
       
-      [(number? (car lis))
-       (mstate (cdr lis) state catch finally continue break return)]
-      
-      [(boolean? (car lis))
-       (mstate (cdr lis) state catch finally continue break return)]
-      
       [(eq? (caar lis) 'return)
-       (return (cons (evaluate (cadar lis) state) state))]
+       (return (cons (evaluate (cadar lis) state catch finally) state))]
       
       [(eq? (caar lis) 'var)
        (mstate (cdr lis)
-               (instantiatevar (cdar lis) state)
+               (instantiatevar (cdar lis) state catch finally)
                catch finally continue break return)]
       
       [(eq? (caar lis) '=)
        (mstate (cdr lis)
-               (updatevar (cdar lis) state)
+               (updatevar (cdar lis) state catch finally)
                catch finally continue break return)]
       
       [(eq? (caar lis) 'begin)
@@ -164,39 +182,19 @@
                      state catch finally continue break return)
                catch finally continue break return)] 
       
-      [(and (eq? (caar lis) 'throw)
-            (not (null? catch)))
-       (catch (cons (list (evaluate (cadar lis) state)) state))]
+      [(and (eq? (caar lis) 'throw) (not (null? catch)))
+       (catch (cons (list (evaluate (cadar lis) state catch finally)) state))]
       
       [(eq? (caar lis) 'throw)
        (error "Throw Outside of try")]
       
       [(eq? (caar lis) 'funcall)
-       (something (mstate (cadr (lookup-all (cadar lis) (truncstate state 1)))
-                          (cons ((caddr (lookup-all (cadar lis) (truncstate state 1))) (getparamval (cddr lis) state) (truncstate state 1)) (truncstate state 1))
-                          startcatch
-                          startfinally
-                          startcontinue
-                          startbreak
-                          '()))])))
+       (mstate (cdr lis)
+               (cdr (runfunction (cadar lis) (lookup-all (cadar lis) state) (cddar lis) state catch finally))
+               catch finally continue break return)]
 
-
-       ;(mstate (cons (evaluate (car lis) state) (cdr lis)) (truncstate (cdr (mstate (cadr (lookup-all (cadar lis) (truncstate state 1)))
-        ;                                                           (cons ((caddr (lookup-all (cadar lis) (truncstate state 1))) (getparamval (cddr lis) state) (truncstate state 1)) (truncstate state 1))
-         ;                                                          startcatch
-          ;                                                         startfinally
-           ;                                                        startcontinue
-            ;                                                       startbreak
-             ;                                                      '())) 1)
-              ; catch finally continue break return)])))
-;(list (mstate (car lis) state catch finally continue break return))
-
-(define something
-  (lambda (returnval lis catch finally continue break return)
-    ;returnval))
-    (mstate (cons (car returnval) (cdr lis)) (truncstate (cdr returnval) 1) catch finally continue break return))) 
-    
-    
+      [(eq? (caar lis) 'function)
+          (mstate (cdr lis) (createfunction (car lis) state) catch finally continue break return)])))     
 
 
 ;; Adds a state to the list of states
@@ -252,7 +250,9 @@
         (finally (removestatelayer (mstate (caddr catchlis)
                                            (instantiatevar
                                             (append (cadr catchlis) (car state))
-                                            (addstatelayer (cdr state)))
+                                            (addstatelayer (cdr state))
+                                            catch
+                                            finally)
                                            catch finally continue break return))))))
 
 
@@ -272,23 +272,23 @@
 
 ;; Evaluates the expression
 (define evaluate
-  (lambda (lis state)
+  (lambda (lis state catch finally)
     (cond
       [(or (boolean? lis) (number? lis))                   lis]
       [(not (list? lis))                                   (lookup-all lis state)]
-      [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state)]
-      [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state)]
-      [(eq? (operator lis) 'funcall)                       (car (runfunction (cadr lis) (getparamval (cddr lis) state) (truncstate state 1)))])))
+      [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state catch finally)]
+      [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state catch finally)]
+      [(eq? (operator lis) 'funcall)                       (car (runfunction (cadr lis) (lookup-all (cadr lis) state) (cddr lis) state catch finally))])))
 
 
 ;; Mvalue for numeric operations
 (define mvalue
-  (lambda (lis state)
+  (lambda (lis state catch finally)
     ; f makes the code more readable, since the behavior is almost always (operator (operands)
     ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
     (let [(f (lambda (op)
-               (op (evaluate (operand1 lis) state)
-                   (evaluate (operand2 lis) state))))]
+               (op (evaluate (operand1 lis) state catch finally)
+                   (evaluate (operand2 lis) state catch finally))))]
       (cond
         [(number? lis)
                                       lis]
@@ -306,16 +306,16 @@
 
 ;; Mbool for boolean logic
 (define mbool
-  (lambda (lis state)
+  (lambda (lis state catch finally)
     ; f and b just make the code more readable
     ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
     ; b applies the input comparison to the mbool of the expression
     (let [(f (lambda (op)
-              (op (evaluate (operand1 lis) state)
-                  (evaluate (operand2 lis) state))))
+              (op (evaluate (operand1 lis) state catch finally)
+                  (evaluate (operand2 lis) state catch finally))))
           (b (lambda (op)
-               (op (evaluate (operand1 lis) state)
-                   (evaluate (operand2 lis) state))))]
+               (op (evaluate (operand1 lis) state catch finally)
+                   (evaluate (operand2 lis) state catch finally))))]
       (cond
         [(boolean? lis)           lis]
         [(not (list? lis))        (lookup-all lis state)]
@@ -327,19 +327,19 @@
         [(eq? (operator lis) '!=) (f (lambda (x y) (not (eq? x y))))]
         [(eq? (operator lis) '&&) (b (lambda (x y) (and x y)))] ; since and is a macro, need to wrap in lambda
         [(eq? (operator lis) '||) (b (lambda (x y) (or x y)))] ; since or is a macro, need to wrap in lambda
-        [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state))]))))
+        [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state catch finally))]))))
 
 
 ;; for if statements
 (define mif
   (lambda (lis state catch finally continue break return)
     (cond
-      [(mbool (cadr lis) state) (mstate (list (caddr lis))
-                                        state catch finally continue break return)]
-      [(hasNestedIf lis)        (mif (cadddr lis)
-                                     state catch finally continue break return)]
-      [else                     (mstate (cdddr lis)
-                                        state catch finally continue break return)])))
+      [(mbool (cadr lis) state catch finally)
+       (mstate (list (caddr lis)) state catch finally continue break return)]
+      [(hasNestedIf lis)
+       (mif (cadddr lis) state catch finally continue break return)]
+      [else
+       (mstate (cdddr lis) state catch finally continue break return)])))
 
 
 ;; Checks if there's and else if
@@ -367,7 +367,7 @@
 (define mwhile
   (lambda (lis state catch finally continue break return)
     (cond
-      [(mbool (cadr lis) state)
+      [(mbool (cadr lis) state catch finally)
        (mwhile lis
                (truncstate
                 (call/cc
@@ -391,14 +391,14 @@
     
 ;; Instatiate variables
 (define instantiatevar
-  (lambda (lis state)
+  (lambda (lis state catch finally)
     (cond
       [(checkexists (car lis) (car state))
        (error (car lis) "Redefining a variable")]
       [(null? (cdr lis))
        (addtostate (car lis) state)]
       [else
-       (updatevar lis (addtostate (car lis) state))])))
+       (updatevar lis (addtostate (car lis) state) catch finally)])))
 
 
 ;; Check if a variable already has been declared, returns true if in current state (expects single layer state)
@@ -414,19 +414,19 @@
 
 ;; default use of updatevar
 (define updatevar
-  (lambda (lis state)
-    (updatevar-all-acc lis state state '())))
+  (lambda (lis state catch finally)
+    (updatevar-all-acc lis state state '() catch finally)))
 
 
 ;; set variable in most recent state for list of states
 (define updatevar-all-acc
-  (lambda (lis state all-state acc)
+  (lambda (lis state all-state acc catch finally)
     (cond
       [(null? state)
-       (error (car lis) "Used Before Declared")]
+       (error (car lis) "Used before declared or out of scope")]
       [(checkexists (car lis) (car state))
        (append acc (cons (updatevar-acc (car lis)
-                                        (evaluate (cadr lis) all-state)
+                                        (evaluate (cadr lis) all-state catch finally)
                                         (car state)
                                         (emptystate))
                          (cdr state)))]
@@ -434,8 +434,9 @@
        (updatevar-all-acc lis
                           (cdr state)
                           all-state
-                          (append acc
-                                  (list (car state))))])))
+                          (append acc (list (car state)))
+                          catch
+                          finally)])))
 
 
 ;; Set variable for single state
@@ -487,8 +488,7 @@
      (lambda (k)
        (cond
          [(list? (map (lambda (xss) (lookup var xss k)) state))
-          state])))))
-          ;(error var "Used Before Declared")])))))
+          (error var "Used Before Declared")])))))
 
       
 ;; Checks if atom is the same as any atom in a list (not * for a reason)
@@ -502,7 +502,7 @@
 
 
 
-;;; Test Suite for Project 2
+
 
 ;; Validates that test evaluates to correct output. Throws an error if it does not.
 (define test
@@ -532,8 +532,8 @@
 ;(test 10 "../testfiles/8.txt")
 ;(test 5 "../testfiles/9.txt")
 ;(test -39 "../testfiles/10.txt")
-;(testError "y: Used Before Declared" "../testfiles/11.txt")
-;(testError "x: Used Before Declared" "../testfiles/12.txt")
+;(testError "y: Used before declared or out of scope" "../testfiles/11.txt")
+;(testError "x: Used before declared or out of scope" "../testfiles/12.txt")
 ;(testError "x: Use Before Assigning" "../testfiles/13.txt")
 ;(testError "x: Redefining a variable" "../testfiles/14.txt")
 ;(test 'true "../testfiles/15.txt")
@@ -548,19 +548,18 @@
 ;(test 164 "../testfiles/2-2.txt")
 ;(test 32 "../testfiles/2-3.txt")
 ;(test 2 "../testfiles/2-4.txt")
-;(testError "min: Used Before Declared" "../testfiles/2-5.txt")
+;(testError "min: Used before declared or out of scope" "../testfiles/2-5.txt")
 ;(test 25 "../testfiles/2-6.txt")
 ;(test 21 "../testfiles/2-7.txt")
 ;(test 6 "../testfiles/2-8.txt")
 ;(test -1 "../testfiles/2-9.txt")
 ;(test 789 "../testfiles/2-10.txt")
-;(testError "y: Used Before Declared" "../testfiles/2-11.txt")
-;(testError "a: Used Before Declared" "../testfiles/2-12.txt")
+;(testError "y: Used before declared or out of scope" "../testfiles/2-11.txt")
+;(testError "a: Used before declared or out of scope" "../testfiles/2-12.txt")
 ;(testError "Break Outside of Loop" "../testfiles/2-13.txt")
 ;(test 12 "../testfiles/2-14.txt")
 ;(test 125 "../testfiles/2-15.txt")
 ;(test 110 "../testfiles/2-16.txt")
-;(test 2000400 "../testfiles/2-17.txt")
 ;(test 101 "../testfiles/2-18.txt")
 ;(testError "Throw Outside of try" "../testfiles/2-19.txt")
 
@@ -576,14 +575,14 @@
 (test 24 "../testfiles/3-9.txt")
 (test 2 "../testfiles/3-10.txt")
 (test 35 "../testfiles/3-11.txt")
-(testError "..." "../testfiles/3-12.txt")
+(testError "Mismatched parameters and arguments" "../testfiles/3-12.txt")
 (test 90 "../testfiles/3-13.txt")
-(test 69 "../testfiles/3-14.txt")
-(test 87 "../testfiles/3-15.txt")
+;(test 69 "../testfiles/3-14.txt")
+;(test 87 "../testfiles/3-15.txt")
 (test 64 "../testfiles/3-16.txt")
-(testError "..." "../testfiles/3-17.txt")
+(testError "b: Used before declared or out of scope" "../testfiles/3-17.txt")
 (test 125 "../testfiles/3-18.txt")
-(testError "..." "../testfiles/3-19.txt")
+(test 100 "../testfiles/3-19.txt")
 (test 2000400 "../testfiles/3-20.txt")
 
 
