@@ -35,7 +35,7 @@
 (define menvironment
   (lambda (lis enviro mainreturn)
     (cond
-      [(null? lis) (mainreturn (runfunction 'main '() enviro))]
+      [(null? lis) (mainreturn (car (runfunction 'main '() enviro)))]
       [(eq? (caar lis) 'function)  (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)]
       [else
        (menvironment (cdr lis)
@@ -103,8 +103,15 @@
   (lambda (lis state catch finally continue break return)
     (cond
       [(null? lis) state]
+      
+      [(number? (car lis))
+       (mstate (cdr lis) state catch finally continue break return)]
+      
+      [(boolean? (car lis))
+       (mstate (cdr lis) state catch finally continue break return)]
+      
       [(eq? (caar lis) 'return)
-       (return (evaluate (cadar lis) state))]
+       (return (cons (evaluate (cadar lis) state) state))]
       
       [(eq? (caar lis) 'var)
        (mstate (cdr lis)
@@ -165,7 +172,31 @@
        (error "Throw Outside of try")]
       
       [(eq? (caar lis) 'funcall)
-       (evaluate (car lis) state)])))     
+       (something (mstate (cadr (lookup-all (cadar lis) (truncstate state 1)))
+                          (cons ((caddr (lookup-all (cadar lis) (truncstate state 1))) (getparamval (cddr lis) state) (truncstate state 1)) (truncstate state 1))
+                          startcatch
+                          startfinally
+                          startcontinue
+                          startbreak
+                          '()))])))
+
+
+       ;(mstate (cons (evaluate (car lis) state) (cdr lis)) (truncstate (cdr (mstate (cadr (lookup-all (cadar lis) (truncstate state 1)))
+        ;                                                           (cons ((caddr (lookup-all (cadar lis) (truncstate state 1))) (getparamval (cddr lis) state) (truncstate state 1)) (truncstate state 1))
+         ;                                                          startcatch
+          ;                                                         startfinally
+           ;                                                        startcontinue
+            ;                                                       startbreak
+             ;                                                      '())) 1)
+              ; catch finally continue break return)])))
+;(list (mstate (car lis) state catch finally continue break return))
+
+(define something
+  (lambda (returnval lis catch finally continue break return)
+    ;returnval))
+    (mstate (cons (car returnval) (cdr lis)) (truncstate (cdr returnval) 1) catch finally continue break return))) 
+    
+    
 
 
 ;; Adds a state to the list of states
@@ -247,7 +278,7 @@
       [(not (list? lis))                                   (lookup-all lis state)]
       [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state)]
       [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state)]
-      [(eq? (operator lis) 'funcall)                       (runfunction (cadr lis) (getparamval (cddr lis) state) (truncstate state 1))])))
+      [(eq? (operator lis) 'funcall)                       (car (runfunction (cadr lis) (getparamval (cddr lis) state) (truncstate state 1)))])))
 
 
 ;; Mvalue for numeric operations
@@ -456,7 +487,8 @@
      (lambda (k)
        (cond
          [(list? (map (lambda (xss) (lookup var xss k)) state))
-          (error var "Used Before Declared")])))))
+          state])))))
+          ;(error var "Used Before Declared")])))))
 
       
 ;; Checks if atom is the same as any atom in a list (not * for a reason)
@@ -552,7 +584,7 @@
 (testError "..." "../testfiles/3-17.txt")
 (test 125 "../testfiles/3-18.txt")
 (testError "..." "../testfiles/3-19.txt")
-(test 2000400 "../testfiles/3-18.txt")
+(test 2000400 "../testfiles/3-20.txt")
 
 
 
