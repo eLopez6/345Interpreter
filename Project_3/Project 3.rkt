@@ -14,8 +14,6 @@
 (define startcontinue '())
 (define startbreak '())
 
-;;; Main program
-
 ;; Main function
 (define main
   (lambda (filename)
@@ -24,7 +22,8 @@
       (lambda (k)
         (menvironment (parser filename) (list (emptyenviro)) k))))))
 
-
+;; converts a true/false value to full representation
+;; otherwise returns the value
 (define checkbool
   (lambda (val)
     (cond
@@ -33,44 +32,54 @@
       [else           val])))
 
 
+;;executes the global space and then calls main
 (define menvironment
   (lambda (lis enviro mainreturn)
     (cond
-      [(null? lis) (mainreturn (car (runfunction 'main (lookup-all 'main enviro) '() enviro startcatch startfinally)))]
-      [(eq? (caar lis) 'function)  (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)]
-      [(eq? (caar lis) 'var) (menvironment (cdr lis) (instantiatevar (cdar lis) enviro startcatch startfinally) mainreturn)])))
+      [(null? lis)
+       (mainreturn (car (runfunction 'main (lookup-all 'main enviro) '() enviro startcatch startfinally)))]
+      [(eq? (caar lis) 'function)
+       (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)]
+      [(eq? (caar lis) 'var)
+       (menvironment (cdr lis) (instantiatevar (cdar lis) enviro startcatch startfinally) mainreturn)])))
 
 
+;;returns the function name
 (define functionname
   (lambda (lis)
     (cadr lis)))
 
 
+;;returns the list of function params
 (define functionparam
   (lambda (lis)
     (caddr lis)))
 
 
+;;returns the parsed function body
 (define functionbody
   (lambda (lis)
     (cadddr lis)))
 
 
+;;adds the function name and its closure to the state
 (define createfunction
   (lambda (lis state)
     (cond
       [(checkexists (functionname lis)  (car state))
        (error (car lis) "Redefining a function")]
       [else
-       (cons (cons (cons (functionname lis) (caar state))
-                   (list (cons
-                          (list (functionparam lis)
-                                (functionbody lis)
-                                getfunctionstate)
-                          (cadar state))))
-                   (cdr state))])))
+       (cons (cons
+              (cons (functionname lis) (caar state))
+              (list (cons (createfunctionclosure lis) (cadar state))))
+             (cdr state))])))
 
+(define createfunctionclosure
+  (lambda (lis)
+    (list (functionparam lis) (functionbody lis) getfunctionstate)))
 
+;;a function that returns the state used by the function
+;;the state used by the function should include a state of its params and any state that existed before the function declaration
 (define getfunctionstate
   (lambda (name paramnames paramvals state catch finally)
     (if (eq? (len paramnames) (len paramvals))
@@ -78,6 +87,7 @@
         (error "Mismatched parameters and arguments"))))
 
 
+;;returns the state at which the function was declared and any state that existed before the function declaration
 (define stateatfunctiondeclared
   (lambda (name state)
     (if (checkexists name (car state))
@@ -85,6 +95,7 @@
         (stateatfunctiondeclared name (cdr state)))))
 
 
+;;returns any state that was created after the function declaration
 (define statebeforefunctiondeclared
   (lambda (name state)
     (if (checkexists name (car state))
@@ -92,6 +103,7 @@
         (cons (car state) (statebeforefunctiondeclared name (cdr state))))))
 
 
+;;creates a list of parameters and their corresponding values
 (define getparamval
   (lambda (lis state catch finally)
     (cond
@@ -99,6 +111,13 @@
       [else        (cons (evaluate (car lis) state catch finally) (getparamval (cdr lis) state catch finally))])))
 
 
+;;returns the function closure from the state
+(define getfunctionclosure
+  (lambda (name state)
+    (lookup-all name state)))
+
+
+;;runs a function
 (define runfunction
   (lambda (funcname closure paramvals state catch finally)
     (updatestateafterfunctioncall funcname
@@ -113,6 +132,8 @@
                                              startbreak
                                              startreturn))))))
 
+
+;combines the returned state with the state that existed before the function was called
 (define updatestateafterfunctioncall
   (lambda (name oldstate newstate)
     (cond
@@ -190,7 +211,7 @@
       
       [(eq? (caar lis) 'funcall)
        (mstate (cdr lis)
-               (cdr (runfunction (cadar lis) (lookup-all (cadar lis) state) (cddar lis) state catch finally))
+               (cdr (runfunction (cadar lis) (getfunctionclosure (cadar lis) state) (cddar lis) state catch finally))
                catch finally continue break return)]
 
       [(eq? (caar lis) 'function)
@@ -564,26 +585,26 @@
 ;(testError "Throw Outside of try" "../testfiles/2-19.txt")
 
 ; Project 3 Tests
-(test 10 "../testfiles/3-1.txt")
-(test 14 "../testfiles/3-2.txt")
-(test 45 "../testfiles/3-3.txt")
-(test 55 "../testfiles/3-4.txt")
-(test 1 "../testfiles/3-5.txt")
-(test 115 "../testfiles/3-6.txt")
-(test 'true' "../testfiles/3-7.txt")
-(test 20 "../testfiles/3-8.txt")
-(test 24 "../testfiles/3-9.txt")
-(test 2 "../testfiles/3-10.txt")
-(test 35 "../testfiles/3-11.txt")
-(testError "Mismatched parameters and arguments" "../testfiles/3-12.txt")
-(test 90 "../testfiles/3-13.txt")
+;(test 10 "../testfiles/3-1.txt")
+;(test 14 "../testfiles/3-2.txt")
+;(test 45 "../testfiles/3-3.txt")
+;(test 55 "../testfiles/3-4.txt")
+;(test 1 "../testfiles/3-5.txt")
+;(test 115 "../testfiles/3-6.txt")
+;(test 'true' "../testfiles/3-7.txt")
+;(test 20 "../testfiles/3-8.txt")
+;(test 24 "../testfiles/3-9.txt")
+;(test 2 "../testfiles/3-10.txt")
+;(test 35 "../testfiles/3-11.txt")
+;(testError "Mismatched parameters and arguments" "../testfiles/3-12.txt")
+;(test 90 "../testfiles/3-13.txt")
 ;(test 69 "../testfiles/3-14.txt")
 ;(test 87 "../testfiles/3-15.txt")
-(test 64 "../testfiles/3-16.txt")
-(testError "b: Used before declared or out of scope" "../testfiles/3-17.txt")
-(test 125 "../testfiles/3-18.txt")
-(test 100 "../testfiles/3-19.txt")
-(test 2000400 "../testfiles/3-20.txt")
+;(test 64 "../testfiles/3-16.txt")
+;(testError "b: Used before declared or out of scope" "../testfiles/3-17.txt")
+;(test 125 "../testfiles/3-18.txt")
+;(test 100 "../testfiles/3-19.txt")
+;(test 2000400 "../testfiles/3-20.txt")
 
 
 
