@@ -22,8 +22,8 @@
       (lambda (k)
         (menvironment (parser filename) (list (emptyenviro)) k))))))
 
-;; converts a true/false value to full representation
-;; otherwise returns the value
+;; Converts a true/false value to full representation
+;; Otherwise returns the value
 (define checkbool
   (lambda (val)
     (cond
@@ -32,7 +32,7 @@
       [else           val])))
 
 
-;;executes the global space and then calls main
+;; Executes the global space and then calls main
 (define menvironment
   (lambda (lis enviro mainreturn)
     (cond
@@ -44,25 +44,25 @@
        (menvironment (cdr lis) (instantiatevar (cdar lis) enviro startcatch startfinally) mainreturn)])))
 
 
-;;returns the function name
+;; Returns the function name
 (define functionname
   (lambda (lis)
     (cadr lis)))
 
 
-;;returns the list of function params
+;; Returns the list of function params
 (define functionparam
   (lambda (lis)
     (caddr lis)))
 
 
-;;returns the parsed function body
+;; Returns the parsed function body
 (define functionbody
   (lambda (lis)
     (cadddr lis)))
 
 
-;;adds the function name and its closure to the state
+;; Adds the function name and its closure to the state
 (define createfunction
   (lambda (lis state)
     (cond
@@ -78,16 +78,20 @@
   (lambda (lis)
     (list (functionparam lis) (functionbody lis) getfunctionstate)))
 
-;;a function that returns the state used by the function
-;;the state used by the function should include a state of its params and any state that existed before the function declaration
+;; A function that returns the state used by the function
+;;
+;; the state used by the function should include a state of its params and any state that existed before the
+;; function declaration
 (define getfunctionstate
   (lambda (name paramnames paramvals state catch finally)
     (if (eq? (len paramnames) (len paramvals))
-        (cons (list paramnames (getparamval paramvals state catch finally)) (stateatfunctiondeclared name state))
+        (cons (list paramnames (getparamval paramvals state catch finally))
+              (stateatfunctiondeclared name state))
         (error "Mismatched parameters and arguments"))))
 
 
-;;returns the state at which the function was declared and any state that existed before the function declaration
+;; Returns the state at which the function was declared and any state that existed before the function
+;; declaration
 (define stateatfunctiondeclared
   (lambda (name state)
     (if (checkexists name (car state))
@@ -95,7 +99,7 @@
         (stateatfunctiondeclared name (cdr state)))))
 
 
-;;returns any state that was created after the function declaration
+;; Returns any state that was created after the function declaration
 (define statebeforefunctiondeclared
   (lambda (name state)
     (if (checkexists name (car state))
@@ -103,21 +107,22 @@
         (cons (car state) (statebeforefunctiondeclared name (cdr state))))))
 
 
-;;creates a list of parameters and their corresponding values
+;; Creates a list of parameters and their corresponding values
 (define getparamval
   (lambda (lis state catch finally)
     (cond
       [(null? lis) '()]
-      [else        (cons (evaluate (car lis) state catch finally) (getparamval (cdr lis) state catch finally))])))
+      [else        (cons (evaluate (car lis) state catch finally)
+                         (getparamval (cdr lis) state catch finally))])))
 
 
-;;returns the function closure from the state
+;; Returns the function closure from the state
 (define getfunctionclosure
   (lambda (name state)
     (lookup-all name state)))
 
 
-;;runs a function
+;; Runs a function
 (define runfunction
   (lambda (funcname closure paramvals state catch finally)
     (updatestateafterfunctioncall funcname
@@ -133,14 +138,16 @@
                                              startreturn))))))
 
 
-;combines the returned state with the state that existed before the function was called
+;; Combines the returned state with the state that existed before the function was called
 (define updatestateafterfunctioncall
   (lambda (name oldstate newstate)
     (cond
       [(not (list? (car newstate)))
-       (cons (car newstate) (append (statebeforefunctiondeclared name oldstate) (cddr newstate)))] ;condition for return
+       (cons (car newstate)
+             (append (statebeforefunctiondeclared name oldstate) (cddr newstate)))] ;condition for return
       [else
-       (cons '() (append (statebeforefunctiondeclared name oldstate) (cdr newstate)))]))) ;condition for no return
+       (cons '()
+             (append (statebeforefunctiondeclared name oldstate) (cdr newstate)))]))) ;condition for no return
     
 
 ;; Mstate
@@ -211,11 +218,16 @@
       
       [(eq? (caar lis) 'funcall)
        (mstate (cdr lis)
-               (cdr (runfunction (cadar lis) (getfunctionclosure (cadar lis) state) (cddar lis) state catch finally))
+               (cdr (runfunction (cadar lis)
+                                 (getfunctionclosure (cadar lis) state)
+                                 (cddar lis)
+                                 state catch finally))
                catch finally continue break return)]
 
       [(eq? (caar lis) 'function)
-          (mstate (cdr lis) (createfunction (car lis) state) catch finally continue break return)])))     
+          (mstate (cdr lis)
+                  (createfunction (car lis) state)
+                  catch finally continue break return)])))     
 
 
 ;; Adds a state to the list of states
@@ -286,7 +298,7 @@
                                   (addstatelayer state)
                                   catch finally continue break return)))))
 
-; abstractions for operators and operands
+;; abstractions for operators and operands
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
@@ -299,7 +311,12 @@
       [(not (list? lis))                                   (lookup-all lis state)]
       [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state catch finally)]
       [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state catch finally)]
-      [(eq? (operator lis) 'funcall)                       (car (runfunction (cadr lis) (lookup-all (cadr lis) state) (cddr lis) state catch finally))])))
+      [(eq? (operator lis) 'funcall)                       (car (runfunction (cadr lis)
+                                                                             (lookup-all (cadr lis) state)
+                                                                             (cddr lis)
+                                                                             state
+                                                                             catch
+                                                                             finally))])))
 
 
 ;; Mvalue for numeric operations
@@ -317,8 +334,7 @@
                                       (lookup-all lis state)]
         [(eq? (operator lis) '+)      (f +)]
         [(and (eq? (operator lis) '-)
-              (eq? (len lis) 3))
-                                      (f -)]
+              (eq? (len lis) 3))      (f -)]
         [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state))] ; negation
         [(eq? (operator lis) '*)      (f *)]
         [(eq? (operator lis) '/)      (f quotient)]
@@ -329,23 +345,20 @@
 (define mbool
   (lambda (lis state catch finally)
     ; f and b just make the code more readable
-    ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
+    ; f applies the input operator the evaluate of the expressions (same as in mvalue above)
     ; b applies the input comparison to the mbool of the expression
-    (let [(f (lambda (op)
-              (op (evaluate (operand1 lis) state catch finally)
-                  (evaluate (operand2 lis) state catch finally))))
-          (b (lambda (op)
+    (let [(b (lambda (op)
                (op (evaluate (operand1 lis) state catch finally)
                    (evaluate (operand2 lis) state catch finally))))]
       (cond
         [(boolean? lis)           lis]
         [(not (list? lis))        (lookup-all lis state)]
-        [(eq? (operator lis) '>)  (f >)]
-        [(eq? (operator lis) '>=) (f >=)]
-        [(eq? (operator lis) '<)  (f <)]
-        [(eq? (operator lis) '<=) (f <=)]
-        [(eq? (operator lis) '==) (f (lambda (x y) (eq? x y)))]
-        [(eq? (operator lis) '!=) (f (lambda (x y) (not (eq? x y))))]
+        [(eq? (operator lis) '>)  (b >)]
+        [(eq? (operator lis) '>=) (b >=)]
+        [(eq? (operator lis) '<)  (b <)]
+        [(eq? (operator lis) '<=) (b <=)]
+        [(eq? (operator lis) '==) (b (lambda (x y) (eq? x y)))]
+        [(eq? (operator lis) '!=) (b (lambda (x y) (not (eq? x y))))]
         [(eq? (operator lis) '&&) (b (lambda (x y) (and x y)))] ; since and is a macro, need to wrap in lambda
         [(eq? (operator lis) '||) (b (lambda (x y) (or x y)))] ; since or is a macro, need to wrap in lambda
         [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state catch finally))]))))
