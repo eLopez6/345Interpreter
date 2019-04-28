@@ -162,7 +162,7 @@
           [(eq? instancename 'this)
            (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared functionname state))]
           [else
-           (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared functionname (lookup-all instancename state)))])
+           (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared (debug functionname) (lookup-all instancename state)))])
         (error "Mismatched parameters and arguments"))))
 
 
@@ -211,20 +211,37 @@
 ;;runs a function of a
 (define runinstancefunction
   (lambda (instancename funcname paramvals state classlist catch finally)
-    (let [(closure (lookupinstancevar instancename funcname state))]
-      (updatestateafterfunctioncall instancename
-                                    funcname
-                                    state
-                                    (call/cc
-                                     (lambda (startreturn)
-                                       (mstate (cadr closure)
-                                               ((caddr closure) instancename funcname (car closure) paramvals state classlist catch finally)
-                                               classlist
-                                               catch
-                                               finally
-                                               startcontinue
-                                               startbreak
-                                               startreturn)))))))
+    (cond
+      [(not (list? instancename)) 
+       (let [(closure (lookupinstancevar instancename funcname state))]
+         (updatestateafterfunctioncall instancename
+                                       funcname
+                                       state
+                                       (call/cc
+                                        (lambda (startreturn)
+                                          (mstate (cadr closure)
+                                                  ((caddr closure) instancename funcname (car closure) paramvals state classlist catch finally)
+                                                  classlist
+                                                  catch
+                                                  finally
+                                                  startcontinue
+                                                  startbreak
+                                                  startreturn)))))]
+      [else
+       (let [(closure (lookupinstancevar 'this funcname (newclassinstance (cadr instancename) classlist)))]
+         (updatestateafterfunctioncall instancename
+                                       funcname
+                                       state
+                                       (call/cc
+                                        (lambda (startreturn)
+                                          (mstate (cadr closure)
+                                                  ((caddr closure) instancename funcname (car closure) paramvals state classlist catch finally)
+                                                  classlist
+                                                  catch
+                                                  finally
+                                                  startcontinue
+                                                  startbreak
+                                                  startreturn)))))])))
 
 
 ;combines the returned state with the state that existed before the function was called
@@ -461,13 +478,13 @@
       [(isincluded (operator lis) '(> >= < <= == || && !))
        (mbool lis state catch finally)]
       [(eq? (operator lis) 'funcall)
-       (car (runinstancefunction (cadadr lis) (car (cddadr lis)) (cddr lis) (debug state) classlist catch finally))]
+       (car (runinstancefunction (cadadr lis) (car (cddadr lis)) (cddr lis) state classlist catch finally))]
       [(eq? (operator lis) 'new)
        (newclassinstance (cadr lis) classlist)]
       [(and (eq? (operator lis) 'dot) (not (list? (operand1 lis))))
        (lookupinstancevar (operand1 lis) (operand2 lis) state)]
       [(and (eq? (operator lis) 'dot) (list? (operand1 lis)))
-       (let [(newstate (evaluate operand1 state classlist catch finally))]
+       (let [(newstate (evaluate (debug (operand1 lis)) state classlist catch finally))]
          (lookupinstancevar 'this (operand2 lis) newstate))])))
 
 
@@ -836,15 +853,15 @@
 
 
 ; Project 3 Tests
-(test 'A 5 "../testfiles/4-0.txt")
-(test 'B 5 "../testfiles/4-0.5.txt")
-(test 'A 15 "../testfiles/4-1.txt")
-(test 'A 12 "../testfiles/4-2.txt")
-(test 'A 125 "../testfiles/4-3.txt")
-(test 'A 36 "../testfiles/4-4.txt")
-(test 'A 54 "../testfiles/4-5.txt")
-(test 'A 110 "../testfiles/4-6.txt")
-(test 'C 26 "../testfiles/4-7.txt")
+;(test 'A 5 "../testfiles/4-0.txt")
+;(test 'B 5 "../testfiles/4-0.5.txt")
+;(test 'A 15 "../testfiles/4-1.txt")
+;(test 'A 12 "../testfiles/4-2.txt")
+;(test 'A 125 "../testfiles/4-3.txt")
+;(test 'A 36 "../testfiles/4-4.txt")
+;(test 'A 54 "../testfiles/4-5.txt")
+(test 'A 110 "../testfiles/4-6.txt")    ; Creating new A is fine, but a problem when trying to actually add. We need to explore evaluate w.r.t to the dot operator and new. 
+;(test 'C 26 "../testfiles/4-7.txt")
 
 
 
