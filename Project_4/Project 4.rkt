@@ -158,7 +158,11 @@
 (define getfunctionstate
   (lambda (instancename functionname paramnames paramvals state classlist catch finally)
     (if (eq? (len paramnames) (len paramvals))
-        (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared functionname (lookup-all instancename state)))
+        (cond
+          [(eq? instancename 'this)
+           (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared functionname state))]
+          [else
+           (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared functionname (lookup-all instancename state)))])
         (error "Mismatched parameters and arguments"))))
 
 
@@ -204,7 +208,7 @@
                startbreak
                startreturn)))))
 
-;;runs a function
+;;runs a function of a
 (define runinstancefunction
   (lambda (instancename funcname paramvals state classlist catch finally)
     (let [(closure (lookupinstancevar instancename funcname state))]
@@ -448,13 +452,23 @@
 (define evaluate
   (lambda (lis state classlist catch finally)
     (cond
-      [(or (boolean? lis) (number? lis))                   lis]
-      [(not (list? lis))                                   (lookup-all lis state)]
-      [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state classlist catch finally)]
-      [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state catch finally)]
-      [(eq? (operator lis) 'funcall)                       (car (runinstancefunction (cadadr lis) (car (cddadr lis)) (cddr lis) state classlist catch finally))]
-      [(eq? (operator lis) 'new)                           (newclassinstance (cadr lis) classlist)]
-      [(eq? (operator lis) 'dot)                           (lookupinstancevar (operand1 lis) (operand2 lis) state)])))
+      [(or (boolean? lis) (number? lis))
+       lis]
+      [(not (list? lis))
+       (lookup-all lis state)]
+      [(isincluded (operator lis) '(+ - * / %))
+       (mvalue lis state classlist catch finally)]
+      [(isincluded (operator lis) '(> >= < <= == || && !))
+       (mbool lis state catch finally)]
+      [(eq? (operator lis) 'funcall)
+       (car (runinstancefunction (cadadr lis) (car (cddadr lis)) (cddr lis) (debug state) classlist catch finally))]
+      [(eq? (operator lis) 'new)
+       (newclassinstance (cadr lis) classlist)]
+      [(and (eq? (operator lis) 'dot) (not (list? (operand1 lis))))
+       (lookupinstancevar (operand1 lis) (operand2 lis) state)]
+      [(and (eq? (operator lis) 'dot) (list? (operand1 lis)))
+       (let [(newstate (evaluate operand1 state classlist catch finally))]
+         (lookupinstancevar 'this (operand2 lis) newstate))])))
 
 
 ;; look up variable in an instance of a class
@@ -828,6 +842,9 @@
 (test 'A 12 "../testfiles/4-2.txt")
 (test 'A 125 "../testfiles/4-3.txt")
 (test 'A 36 "../testfiles/4-4.txt")
+(test 'A 54 "../testfiles/4-5.txt")
+(test 'A 110 "../testfiles/4-6.txt")
+(test 'C 26 "../testfiles/4-7.txt")
 
 
 
