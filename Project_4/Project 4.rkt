@@ -4,9 +4,11 @@
 ;Jacob Alspaw
 
 ;(require "simpleParser.rkt")
-(require "functionParser.rkt")
+;(require "functionParser.rkt")
+(require "classParser.rkt")
 
 ;; Definitions for abstraction
+(define emptyclasslist (lambda () '(()())))
 (define emptyenviro (lambda () '(()())))
 (define emptystate (lambda () '(()())))
 (define startcatch '())
@@ -14,16 +16,78 @@
 (define startcontinue '())
 (define startbreak '())
 
+
 ;; Main function
 (define main
-  (lambda (filename)
+  (lambda (mainclass filename)
     (checkbool
      (call/cc
       (lambda (k)
-        (menvironment (parser filename) (list (emptyenviro)) k))))))
+        (invokemain mainclass (classclosures (parser filename) (emptyclasslist)) k))))))
 
-;; Converts a true/false value to full representation
-;; Otherwise returns the value
+
+;; Invokes the main method of the requested class
+(define invokemain
+  (lambda (mainclass classlist mainreturn)
+    (cond
+      [(null? (car classlist))
+       (error mainclass "The class does not exist in the defined classes")]
+      [(eq? mainclass (caar classlist))
+       (mainreturn (car (runstaticfunction 'main
+                                           (lookup-all 'main (car (cdaadr classlist)))
+                                           '()
+                                           (environmentformain (caadr classlist))
+                                           classlist
+                                           startcatch
+                                           startfinally)))]
+      [else
+       (invokemain mainclass (cons
+                              (cdar (classlist))
+                              (list (cdadr classlist))))])))
+
+
+(define environmentformain
+  (lambda (classclosure)
+    (list (cons (list 'main) (list (lookup-all 'main (cadr classclosure)))))))
+
+
+(define classclosures
+  (lambda (lis classlist)
+    (cond
+      [(null? lis) classlist]
+      [else        (classclosures (cdr lis) (appendclass (car lis) classlist))])))
+
+(define appendclass
+  (lambda (lis classlist)
+    (cond
+      [(checkexists (classname lis)  classlist)
+       (error (classname lis) "Redefining a class")]
+      [else
+       (cons
+        (cons (classname lis) (car classlist))
+        (list (cons (list (classparent lis) (createclassclosure lis)) (cadr classlist))))])))
+
+(define createclassclosure
+  (lambda (lis)
+    (menvironment (classbody lis) (list (emptyenviro)))))
+
+(define classname
+  (lambda (lis)
+    (cadr lis)))
+
+(define classparent
+  (lambda (lis)
+    (cond
+      [(null? (caddr lis)) '()]
+      [else                (cadr (caddr lis))])))
+
+(define classbody
+  (lambda (lis)
+    (cadddr lis)))
+
+
+;; converts a true/false value to full representation
+;; otherwise returns the value
 (define checkbool
   (lambda (val)
     (cond
@@ -32,37 +96,37 @@
       [else           val])))
 
 
-;; Executes the global space and then calls main
+;;executes the global space and then calls main
 (define menvironment
-  (lambda (lis enviro mainreturn)
+  (lambda (lis enviro)
     (cond
       [(null? lis)
-       (mainreturn (car (runfunction 'main (lookup-all 'main enviro) '() enviro startcatch startfinally)))]
-      [(eq? (caar lis) 'function)
-       (menvironment (cdr lis) (createfunction (car lis) enviro) mainreturn)]
+       enviro]
+      [(or (eq? (caar lis) 'function) (eq? (caar lis) 'static-function))
+       (menvironment (cdr lis) (createfunction (car lis) enviro))]
       [(eq? (caar lis) 'var)
-       (menvironment (cdr lis) (instantiatevar (cdar lis) enviro startcatch startfinally) mainreturn)])))
+       (menvironment (cdr lis) (instantiatevar (cdar lis) enviro (emptyclasslist) startcatch startfinally))])))
 
 
-;; Returns the function name
+;;returns the function name
 (define functionname
   (lambda (lis)
     (cadr lis)))
 
 
-;; Returns the list of function params
+;;returns the list of function params
 (define functionparam
   (lambda (lis)
     (caddr lis)))
 
 
-;; Returns the parsed function body
+;;returns the parsed function body
 (define functionbody
   (lambda (lis)
     (cadddr lis)))
 
 
-;; Adds the function name and its closure to the state
+;;adds the function name and its closure to the state
 (define createfunction
   (lambda (lis state)
     (cond
@@ -78,20 +142,16 @@
   (lambda (lis)
     (list (functionparam lis) (functionbody lis) getfunctionstate)))
 
-;; A function that returns the state used by the function
-;;
-;; the state used by the function should include a state of its params and any state that existed before the
-;; function declaration
+;;a function that returns the state used by the function
+;;the state used by the function should include a state of its params and any state that existed before the function declaration
 (define getfunctionstate
-  (lambda (name paramnames paramvals state catch finally)
+  (lambda (name paramnames paramvals state classlist catch finally)
     (if (eq? (len paramnames) (len paramvals))
-        (cons (list paramnames (getparamval paramvals state catch finally))
-              (stateatfunctiondeclared name state))
+        (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared name state))
         (error "Mismatched parameters and arguments"))))
 
 
-;; Returns the state at which the function was declared and any state that existed before the function
-;; declaration
+;;returns the state at which the function was declared and any state that existed before the function declaration
 (define stateatfunctiondeclared
   (lambda (name state)
     (if (checkexists name (car state))
@@ -99,70 +159,80 @@
         (stateatfunctiondeclared name (cdr state)))))
 
 
-;; Returns any state that was created after the function declaration
+;;returns any state that was created after the function declaration
 (define statebeforefunctiondeclared
-  (lambda (name state)
-    (if (checkexists name (car state))
+  (lambda (instancename state)
+    (if (checkexists instancename (car state))
         '()
-        (cons (car state) (statebeforefunctiondeclared name (cdr state))))))
+        (cons (car state) (statebeforefunctiondeclared instancename (cdr state))))))
 
 
-;; Creates a list of parameters and their corresponding values
+;;creates a list of parameters and their corresponding values
 (define getparamval
-  (lambda (lis state catch finally)
+  (lambda (lis state classlist catch finally)
     (cond
       [(null? lis) '()]
-      [else        (cons (evaluate (car lis) state catch finally)
-                         (getparamval (cdr lis) state catch finally))])))
+      [else        (cons (evaluate (car lis) state classlist catch finally) (getparamval (cdr lis) state classlist catch finally))])))
 
 
-;; Returns the function closure from the state
-(define getfunctionclosure
-  (lambda (name state)
-    (lookup-all name state)))
+;;runs a static function
+(define runstaticfunction
+  (lambda (funcname closure paramvals state classlist catch finally)
+    (call/cc
+     (lambda (startreturn)
+       (mstate (cadr closure)
+               ((caddr closure) funcname (car closure) paramvals state classlist catch finally)
+               classlist
+               catch
+               finally
+               startcontinue
+               startbreak
+               startreturn)))))
+
+;;runs a function
+(define runinstancefunction
+  (lambda (instancename funcname paramvals state classlist catch finally)
+    (let [(closure (lookupinstancevar instancename funcname state))]
+      ;(print state))))
+      (updatestateafterfunctioncall instancename
+                                    funcname
+                                    state
+                                    (call/cc
+                                     (lambda (startreturn)
+                                       (mstate (cadr closure)
+                                               ((caddr closure) funcname (car closure) paramvals (car (lookup-all instancename state)) classlist catch finally)
+                                               classlist
+                                               catch
+                                               finally
+                                               startcontinue
+                                               startbreak
+                                               startreturn)))))))
 
 
-;; Runs a function
-(define runfunction
-  (lambda (funcname closure paramvals state catch finally)
-    (updatestateafterfunctioncall funcname
-                                  state
-                                  (call/cc
-                                   (lambda (startreturn)
-                                     (mstate (cadr closure)
-                                             ((caddr closure) funcname (car closure) paramvals state catch finally)
-                                             catch
-                                             finally
-                                             startcontinue
-                                             startbreak
-                                             startreturn))))))
-
-
-;; Combines the returned state with the state that existed before the function was called
+;combines the returned state with the state that existed before the function was called
 (define updatestateafterfunctioncall
-  (lambda (name oldstate newstate)
+  (lambda (instancename funcname oldstate newstate)
+    ;(print newstate)))
     (cond
       [(not (list? (car newstate)))
-       (cons (car newstate)
-             (append (statebeforefunctiondeclared name oldstate) (cddr newstate)))] ;condition for return
+       (cons (car newstate) (append (statebeforefunctiondeclared instancename oldstate) (cddr newstate)))] ;condition for return
       [else
-       (cons '()
-             (append (statebeforefunctiondeclared name oldstate) (cdr newstate)))]))) ;condition for no return
+       (cons '() (append (statebeforefunctiondeclared instancename oldstate) (cdr newstate)))]))) ;condition for no return
     
 
 ;; Mstate
 (define mstate
-  (lambda (lis state catch finally continue break return)
+  (lambda (lis state classlist catch finally continue break return)
     (cond
       [(null? lis) state]
       
       [(eq? (caar lis) 'return)
-       (return (cons (evaluate (cadar lis) state catch finally) state))]
+       (return (cons (evaluate (cadar lis) state classlist catch finally) state))]
       
       [(eq? (caar lis) 'var)
        (mstate (cdr lis)
-               (instantiatevar (cdar lis) state catch finally)
-               catch finally continue break return)]
+               (instantiatevar (cdar lis) state classlist catch finally)
+               classlist catch finally continue break return)]
       
       [(eq? (caar lis) '=)
        (mstate (cdr lis)
@@ -218,16 +288,11 @@
       
       [(eq? (caar lis) 'funcall)
        (mstate (cdr lis)
-               (cdr (runfunction (cadar lis)
-                                 (getfunctionclosure (cadar lis) state)
-                                 (cddar lis)
-                                 state catch finally))
+               (cdr (runinstancefunction (car (cdadar lis)) (cadr (cdadar lis)) (cddar lis) state classlist catch finally))
                catch finally continue break return)]
 
       [(eq? (caar lis) 'function)
-          (mstate (cdr lis)
-                  (createfunction (car lis) state)
-                  catch finally continue break return)])))     
+       (mstate (cdr lis) (createfunction (car lis) state) catch finally continue break return)])))    
 
 
 ;; Adds a state to the list of states
@@ -248,11 +313,27 @@
     (cond
       [(eq? (len state) length) state]
       [else                     (truncstate (removestatelayer state) length)])))
-  
 
+
+;;creates a new instance of a class
+(define newclassinstance
+  (lambda (classname classlist)
+    (cond
+      [(null? classname)
+       '()]
+      [else
+       (let [(closure (getclassclosure classname classlist))]
+         (cons (cadr closure) (newclassinstance (car closure) classlist)))])))
+
+
+(define getclassclosure
+  (lambda (classname classlist)
+    (lookup classname classlist identity)))
+  
+  
 ;; Mtry-catch-finally
 (define mtcf
-  (lambda (trylis catchlis finallylis state catch finally continue break return)
+  (lambda (trylis catchlis finallylis state classlist catch finally continue break return)
     (evalfinally finallylis
                  (call/cc
                   (lambda (finally)
@@ -260,7 +341,7 @@
                                (call/cc
                                 (lambda (catch)
                                   (evaltry trylis
-                                           state catch finally continue break return))) ; conts for evaltry
+                                           state classlist catch finally continue break return))) ; conts for evaltry
                                catch finally continue break return))) ; conts for evalcatch
                  catch finally continue break return))) ; conts for evalfinally
 
@@ -277,13 +358,14 @@
 
 ;; Evaluate the entirety of the block
 (define evalcatch
-  (lambda (catchlis state catch finally continue break return)
+  (lambda (catchlis state classlist catch finally continue break return)
     (if (null? catchlis)
         state
         (finally (removestatelayer (mstate (caddr catchlis)
                                            (instantiatevar
                                             (append (cadr catchlis) (car state))
                                             (addstatelayer (cdr state))
+                                            classlist
                                             catch
                                             finally)
                                            catch finally continue break return))))))
@@ -298,44 +380,57 @@
                                   (addstatelayer state)
                                   catch finally continue break return)))))
 
-;; abstractions for operators and operands
+; abstractions for operators and operands
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
 
 ;; Evaluates the expression
 (define evaluate
-  (lambda (lis state catch finally)
+  (lambda (lis state classlist catch finally)
     (cond
       [(or (boolean? lis) (number? lis))                   lis]
       [(not (list? lis))                                   (lookup-all lis state)]
-      [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state catch finally)]
+      [(isincluded (operator lis) '(+ - * / %))            (mvalue lis state classlist catch finally)]
       [(isincluded (operator lis) '(> >= < <= == || && !)) (mbool lis state catch finally)]
-      [(eq? (operator lis) 'funcall)                       (car (runfunction (cadr lis)
-                                                                             (lookup-all (cadr lis) state)
-                                                                             (cddr lis)
-                                                                             state
-                                                                             catch
-                                                                             finally))])))
+      [(eq? (operator lis) 'funcall)                       (car (runinstancefunction (cadadr lis) (car (cddadr lis)) (cddr lis) state classlist catch finally))]
+      [(eq? (operator lis) 'new)                           (newclassinstance (cadr lis) classlist)]
+      [(eq? (operator lis) 'dot)                           (lookupinstancevar (operand1 lis) (operand2 lis) state)])))
+
+
+(define lookupinstancevar
+  (lambda (instancename var state)
+    (lookupinstancevarhelper var (lookup-all instancename state))))
+
+(define lookupinstancevarhelper
+  (lambda (var instance)
+    (cond
+      [(null? instance)
+       (error (var) "Function / field not defined")]
+      [(null? (lookup-all var (car instance)))
+       (lookupinstancevarhelper var (cdr instance))]
+      [else
+       (lookup-all var (car instance))])))
 
 
 ;; Mvalue for numeric operations
 (define mvalue
-  (lambda (lis state catch finally)
+  (lambda (lis state classlist catch finally)
     ; f makes the code more readable, since the behavior is almost always (operator (operands)
     ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
     (let [(f (lambda (op)
-               (op (evaluate (operand1 lis) state catch finally)
-                   (evaluate (operand2 lis) state catch finally))))]
+               (op (evaluate (operand1 lis) state classlist catch finally)
+                   (evaluate (operand2 lis) state classlist catch finally))))]
       (cond
         [(number? lis)
-                                      lis]
+         lis]
         [(not (list? lis))
-                                      (lookup-all lis state)]
+         (lookup-all lis state)]
         [(eq? (operator lis) '+)      (f +)]
         [(and (eq? (operator lis) '-)
-              (eq? (len lis) 3))      (f -)]
-        [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state))] ; negation
+              (eq? (len lis) 3))
+         (f -)]
+        [(eq? (operator lis) '-)      (- (mvalue (operand1 lis) state classlist catch finally))] ; negation
         [(eq? (operator lis) '*)      (f *)]
         [(eq? (operator lis) '/)      (f quotient)]
         [(eq? (operator lis) '%)      (f remainder)]))))
@@ -345,20 +440,23 @@
 (define mbool
   (lambda (lis state catch finally)
     ; f and b just make the code more readable
-    ; f applies the input operator the evaluate of the expressions (same as in mvalue above)
+    ; f applies the input operator the mvalue of the expressions (same as in mvalue above)
     ; b applies the input comparison to the mbool of the expression
-    (let [(b (lambda (op)
+    (let [(f (lambda (op)
+               (op (evaluate (operand1 lis) state catch finally)
+                   (evaluate (operand2 lis) state catch finally))))
+          (b (lambda (op)
                (op (evaluate (operand1 lis) state catch finally)
                    (evaluate (operand2 lis) state catch finally))))]
       (cond
         [(boolean? lis)           lis]
         [(not (list? lis))        (lookup-all lis state)]
-        [(eq? (operator lis) '>)  (b >)]
-        [(eq? (operator lis) '>=) (b >=)]
-        [(eq? (operator lis) '<)  (b <)]
-        [(eq? (operator lis) '<=) (b <=)]
-        [(eq? (operator lis) '==) (b (lambda (x y) (eq? x y)))]
-        [(eq? (operator lis) '!=) (b (lambda (x y) (not (eq? x y))))]
+        [(eq? (operator lis) '>)  (f >)]
+        [(eq? (operator lis) '>=) (f >=)]
+        [(eq? (operator lis) '<)  (f <)]
+        [(eq? (operator lis) '<=) (f <=)]
+        [(eq? (operator lis) '==) (f (lambda (x y) (eq? x y)))]
+        [(eq? (operator lis) '!=) (f (lambda (x y) (not (eq? x y))))]
         [(eq? (operator lis) '&&) (b (lambda (x y) (and x y)))] ; since and is a macro, need to wrap in lambda
         [(eq? (operator lis) '||) (b (lambda (x y) (or x y)))] ; since or is a macro, need to wrap in lambda
         [(eq? (operator lis) '!)  (not (mbool (operand1 lis) state catch finally))]))))
@@ -418,21 +516,21 @@
 (define addtostate
   (lambda (val state)
     (cons
-          (cons (cons val (caar state))
-                (list (cons '() (cadar state))))
-          (cdr state))))
+     (cons (cons val (caar state))
+           (list (cons '() (cadar state))))
+     (cdr state))))
 
     
 ;; Instatiate variables
 (define instantiatevar
-  (lambda (lis state catch finally)
+  (lambda (lis state classlist catch finally)
     (cond
       [(checkexists (car lis) (car state))
        (error (car lis) "Redefining a variable")]
       [(null? (cdr lis))
        (addtostate (car lis) state)]
       [else
-       (updatevar lis (addtostate (car lis) state) catch finally)])))
+       (updatevar lis (addtostate (car lis) state) classlist catch finally)])))
 
 
 ;; Check if a variable already has been declared, returns true if in current state (expects single layer state)
@@ -448,19 +546,19 @@
 
 ;; default use of updatevar
 (define updatevar
-  (lambda (lis state catch finally)
-    (updatevar-all-acc lis state state '() catch finally)))
+  (lambda (lis state classlist catch finally)
+    (updatevar-all-acc lis state state classlist '() catch finally)))
 
 
 ;; set variable in most recent state for list of states
 (define updatevar-all-acc
-  (lambda (lis state all-state acc catch finally)
+  (lambda (lis state all-state classlist acc catch finally)
     (cond
       [(null? state)
        (error (car lis) "Used before declared or out of scope")]
       [(checkexists (car lis) (car state))
        (append acc (cons (updatevar-acc (car lis)
-                                        (evaluate (cadr lis) all-state catch finally)
+                                        (evaluate (cadr lis) all-state classlist catch finally)
                                         (car state)
                                         (emptystate))
                          (cdr state)))]
@@ -479,14 +577,14 @@
     (cond
       [(null? (car state)) acc]
       [(eq? (caar state) var)
-        (updatevar-acc var
-                       val
-                       (cons (cdar state)
-                             (list (cdadr state)))
-                       (cons (cons (caar state)
-                                   (car acc))
-                             (list (cons val
-                                         (cadr acc)))))]
+       (updatevar-acc var
+                      val
+                      (cons (cdar state)
+                            (list (cdadr state)))
+                      (cons (cons (caar state)
+                                  (car acc))
+                            (list (cons val
+                                        (cadr acc)))))]
       [else
        (updatevar-acc var
                       val
@@ -538,11 +636,20 @@
 
 
 
+
+;;debug from lecture
+(define-syntax debug
+  (lambda (syn)
+    (define slist (syntax->list syn))
+    (datum->syntax syn `(let ((x ,(cadr slist)))
+                   (begin (print x) (newline) x)))))
+
+
 ;; Validates that test evaluates to correct output. Throws an error if it does not.
 (define test
-  (lambda (val file)
+  (lambda (mainclass val file)
     (cond
-      [(not (eq? val (main file))) (error "TEST FAILED" file)])))
+      [(not (eq? val (main mainclass file))) (error "TEST FAILED" file)])))
 
 ;; Validates that a test throws the correct error. 
 (require racket/exn) ; required library for converting to exception to String
@@ -618,6 +725,15 @@
 ;(test 125 "../testfiles/3-18.txt")
 ;(test 100 "../testfiles/3-19.txt")
 ;(test 2000400 "../testfiles/3-20.txt")
+
+
+; Project 3 Tests
+(test 'A 5 "../testfiles/4-0.txt")
+(test 'B 5 "../testfiles/4-0.5.txt")
+(test 'A 15 "../testfiles/4-1.txt")
+(test 'A 12 "../testfiles/4-2.txt")
+(test 'A 125 "../testfiles/4-3.txt")
+(test 'A 36 "../testfiles/4-4.txt")
 
 
 
