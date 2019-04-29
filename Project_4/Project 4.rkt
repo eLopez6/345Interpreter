@@ -77,17 +77,19 @@
   (lambda (lis)
     (menvironment (classbody lis) (list (emptyenviro)))))
 
-
+; returns name of class in append class
 (define classname
   (lambda (lis)
     (cadr lis)))
 
+; returns parent of class in append class
 (define classparent
   (lambda (lis)
     (cond
       [(null? (caddr lis)) '()]
       [else                (cadr (caddr lis))])))
 
+; returns body section of class in append class
 (define classbody
   (lambda (lis)
     (cadddr lis)))
@@ -113,7 +115,8 @@
       [(or (eq? (caar lis) 'function) (eq? (caar lis) 'static-function))
        (menvironment (cdr lis) (createfunction (car lis) enviro))]
       [(eq? (caar lis) 'var)
-       (menvironment (cdr lis) (instantiatevar (cdar lis) enviro (emptyclasslist) startcatch startfinally))])))
+       (menvironment (cdr lis)
+                     (instantiatevar (cdar lis) enviro (emptyclasslist) startcatch startfinally))])))
 
 
 ;;returns the function name
@@ -229,7 +232,15 @@
                                        (call/cc
                                         (lambda (startreturn)
                                           (mstate (cadr closure)
-                                                  ((caddr closure) instancename funcname (car closure) paramvals state classlist catch finally)
+                                                  ((caddr closure)
+                                                   instancename
+                                                   funcname
+                                                   (car closure)
+                                                   paramvals
+                                                   state
+                                                   classlist
+                                                   catch
+                                                   finally)
                                                   classlist
                                                   catch
                                                   finally
@@ -319,7 +330,7 @@
       [(null? lis) state]
       
       [(eq? (caar lis) 'return)
-       (return (cons (evaluate (debug (cadar lis)) (debug state) classlist catch finally) state))]
+       (return (cons (evaluate (cadar lis) state classlist catch finally) state))]
       
       [(eq? (caar lis) 'var)
        (mstate (cdr lis)
@@ -526,12 +537,12 @@
        state))))
   
 
-
+;;creates a new instance of a class
 (define newclassinstance
   (lambda (classname classlist)
     (list (cons (list 'this) (list (list (newclassinstancehelper classname classlist)))))))
 
-;;creates a new instance of a class
+;;contents of new class
 (define newclassinstancehelper
   (lambda (classname classlist)
     (cond
@@ -866,15 +877,15 @@
 
 
 ; Project 3 Tests
-(test 'A 5 "../testfiles/4-0.txt")
-(test 'B 5 "../testfiles/4-0.5.txt")
-(test 'A 15 "../testfiles/4-1.txt")
-(test 'A 12 "../testfiles/4-2.txt")
-(test 'A 125 "../testfiles/4-3.txt")
-(test 'A 36 "../testfiles/4-4.txt")
-(test 'A 54 "../testfiles/4-5.txt")
-(test 'A 110 "../testfiles/4-6.txt")
-(test 'C 26 "../testfiles/4-7.txt")
+;(test 'A 5 "../testfiles/4-0.txt")
+;(test 'B 5 "../testfiles/4-0.5.txt")
+;(test 'A 15 "../testfiles/4-1.txt")
+;(test 'A 12 "../testfiles/4-2.txt")
+;(test 'A 125 "../testfiles/4-3.txt")
+;(test 'A 36 "../testfiles/4-4.txt")
+;(test 'A 54 "../testfiles/4-5.txt")
+;(test 'A 110 "../testfiles/4-6.txt")
+;(test 'C 26 "../testfiles/4-7.txt")
 
 
 
