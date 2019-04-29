@@ -160,9 +160,15 @@
     (if (eq? (len paramnames) (len paramvals))
         (cond
           [(eq? instancename 'this)
-           (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared functionname state))]
+           (cons (list paramnames (getparamval paramvals state classlist catch finally))
+                 (stateatfunctiondeclared functionname state))]
+          [(not (list? instancename))
+           (cons (list paramnames (getparamval paramvals state classlist catch finally))
+                 (stateatfunctiondeclared functionname (lookup-all instancename state)))]
           [else
-           (cons (list paramnames (getparamval paramvals state classlist catch finally)) (stateatfunctiondeclared (debug functionname) (lookup-all instancename state)))])
+           (let [(newstate (evaluate instancename state classlist catch finally))]
+             (cons (list paramnames (getparamval paramvals state classlist catch finally))
+                   (stateatfunctiondeclared functionname newstate)))])
         (error "Mismatched parameters and arguments"))))
 
 
@@ -229,19 +235,16 @@
                                                   startreturn)))))]
       [else
        (let [(closure (lookupinstancevar 'this funcname (newclassinstance (cadr instancename) classlist)))]
-         (updatestateafterfunctioncall instancename
-                                       funcname
-                                       state
-                                       (call/cc
-                                        (lambda (startreturn)
-                                          (mstate (cadr closure)
-                                                  ((caddr closure) instancename funcname (car closure) paramvals state classlist catch finally)
-                                                  classlist
-                                                  catch
-                                                  finally
-                                                  startcontinue
-                                                  startbreak
-                                                  startreturn)))))])))
+         (call/cc
+          (lambda (startreturn)
+            (mstate (cadr closure)
+                    ((caddr closure) instancename funcname (car closure) paramvals state classlist catch finally)
+                    classlist
+                    catch
+                    finally
+                    startcontinue
+                    startbreak
+                    startreturn))))])))
 
 
 ;combines the returned state with the state that existed before the function was called
@@ -484,7 +487,7 @@
       [(and (eq? (operator lis) 'dot) (not (list? (operand1 lis))))
        (lookupinstancevar (operand1 lis) (operand2 lis) state)]
       [(and (eq? (operator lis) 'dot) (list? (operand1 lis)))
-       (let [(newstate (evaluate (debug (operand1 lis)) state classlist catch finally))]
+       (let [(newstate (evaluate (operand1 lis) state classlist catch finally))]
          (lookupinstancevar 'this (operand2 lis) newstate))])))
 
 
@@ -767,14 +770,15 @@
   (lambda (syn)
     (define slist (syntax->list syn))
     (datum->syntax syn `(let ((x ,(cadr slist)))
-                   (begin (print x) (newline) x)))))
+                          (begin (print x) (newline) x)))))
 
 
 ;; Validates that test evaluates to correct output. Throws an error if it does not.
 (define test
   (lambda (mainclass val file)
     (cond
-      [(not (eq? val (main mainclass file))) (error "TEST FAILED" file)])))
+      [(eq? val (main mainclass file)) (println (string-append "passed --> " file))]
+      [else (error "TEST FAILED" file)])))
 
 ;; Validates that a test throws the correct error. 
 (require racket/exn) ; required library for converting to exception to String
@@ -853,14 +857,14 @@
 
 
 ; Project 3 Tests
-;(test 'A 5 "../testfiles/4-0.txt")
-;(test 'B 5 "../testfiles/4-0.5.txt")
-;(test 'A 15 "../testfiles/4-1.txt")
-;(test 'A 12 "../testfiles/4-2.txt")
-;(test 'A 125 "../testfiles/4-3.txt")
-;(test 'A 36 "../testfiles/4-4.txt")
-;(test 'A 54 "../testfiles/4-5.txt")
-(test 'A 110 "../testfiles/4-6.txt")    ; Creating new A is fine, but a problem when trying to actually add. We need to explore evaluate w.r.t to the dot operator and new. 
+(test 'A 5 "../testfiles/4-0.txt")
+(test 'B 5 "../testfiles/4-0.5.txt")
+(test 'A 15 "../testfiles/4-1.txt")
+(test 'A 12 "../testfiles/4-2.txt")
+(test 'A 125 "../testfiles/4-3.txt")
+(test 'A 36 "../testfiles/4-4.txt")
+(test 'A 54 "../testfiles/4-5.txt")
+(test 'A 110 "../testfiles/4-6.txt")
 ;(test 'C 26 "../testfiles/4-7.txt")
 
 
