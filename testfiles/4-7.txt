@@ -16,7 +16,7 @@ class B extends A {
   var z = 3;
 
   function m() {
-    return super.m();
+    return this.y;
   }
 
   function m2() {
@@ -29,7 +29,7 @@ class C extends B {
   var w = 4;
 
   function m() {
-    return super.m();
+    return super.x;
   }
 
   static function main() {

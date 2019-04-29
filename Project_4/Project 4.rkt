@@ -162,6 +162,9 @@
           [(eq? instancename 'this)
            (cons (list paramnames (getparamval paramvals state classlist catch finally))
                  (stateatfunctiondeclared functionname state))]
+          [(eq? instancename 'super)
+           (cons (list paramnames (getparamval paramvals state classlist catch finally))
+                 (stateatfunctiondeclared functionname (lookup-all 'this state)))]
           [(not (list? instancename))
            (cons (list paramnames (getparamval paramvals state classlist catch finally))
                  (stateatfunctiondeclared functionname (lookup-all instancename state)))]
@@ -316,7 +319,7 @@
       [(null? lis) state]
       
       [(eq? (caar lis) 'return)
-       (return (cons (evaluate (cadar lis) state classlist catch finally) state))]
+       (return (cons (evaluate (debug (cadar lis)) (debug state) classlist catch finally) state))]
       
       [(eq? (caar lis) 'var)
        (mstate (cdr lis)
@@ -497,6 +500,8 @@
     (cond
       [(eq? instancename 'this)
        (lookupinstancevarhelper var (lookup-all instancename state))]
+      [(eq? instancename 'super)
+       (lookupinstancevarhelper var (cdr (lookup-all 'this state)))]
       [else
        (lookupinstancevarhelper var (lookup-all 'this (lookup-all instancename state)))])))
 
@@ -504,7 +509,7 @@
   (lambda (var instance)
     (cond
       [(null? instance)
-       (error (var) "Function / field not defined")]
+       (error var "Function / field not defined")]
       [(null? (lookup-all var instance))
        (lookupinstancevarhelper var (cdr instance))]
       [else
@@ -522,15 +527,19 @@
   
 
 
-;;creates a new instance of a class
 (define newclassinstance
+  (lambda (classname classlist)
+    (list (cons (list 'this) (list (list (newclassinstancehelper classname classlist)))))))
+
+;;creates a new instance of a class
+(define newclassinstancehelper
   (lambda (classname classlist)
     (cond
       [(null? classname)
        '()]
       [else
        (let [(closure (getclassclosure classname classlist))]
-         (list (cons (list 'this) (list (cons (cadr closure) (newclassinstance (car closure) classlist))))))])))
+         (cons (caadr closure) (newclassinstancehelper (car closure) classlist)))])))
 
 
 ;; looks for class
@@ -865,7 +874,7 @@
 (test 'A 36 "../testfiles/4-4.txt")
 (test 'A 54 "../testfiles/4-5.txt")
 (test 'A 110 "../testfiles/4-6.txt")
-;(test 'C 26 "../testfiles/4-7.txt")
+(test 'C 26 "../testfiles/4-7.txt")
 
 
 
